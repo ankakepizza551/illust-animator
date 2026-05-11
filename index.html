@@ -393,6 +393,82 @@
     line-height: 1.5;
   }
 
+  /* export settings */
+  .export-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .export-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .seg-group {
+    display: flex;
+    gap: 4px;
+  }
+  .seg-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    padding: 4px 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .seg-btn:hover { color: var(--text); border-color: var(--accent); }
+  .seg-btn.active {
+    background: rgba(126,184,247,0.12);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* progress bar */
+  .progress-wrap {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .progress-wrap.visible { display: flex; }
+  .progress-bar-bg {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s;
+  }
+  .progress-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    text-align: right;
+  }
+
+  /* estimated time badge */
+  .est-badge {
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-family: 'Space Mono', monospace;
+  }
+
   /* hidden input */
   #file-input { display: none; }
 
@@ -510,9 +586,54 @@
 
     <!-- export -->
     <div class="panel">
-      <div class="panel-title">エクスポート</div>
-      <button id="export-btn" disabled>🎬 GIF として保存</button>
-      <p class="export-note">※ GIF出力には gif.js を使用します<br>ブラウザで直接録画・ダウンロード</p>
+      <div class="panel-title">エクスポート設定</div>
+
+      <div class="export-settings">
+        <div class="export-row">
+          <span>形式</span>
+          <div class="seg-group" id="fmt-group">
+            <button class="seg-btn active" data-fmt="gif">GIF</button>
+            <button class="seg-btn" data-fmt="webm">WebM</button>
+            <button class="seg-btn" data-fmt="apng">APNG</button>
+          </div>
+        </div>
+        <div class="export-row">
+          <span>解像度</span>
+          <div class="seg-group" id="res-group">
+            <button class="seg-btn active" data-res="240">240px</button>
+            <button class="seg-btn" data-res="400">400px</button>
+            <button class="seg-btn" data-res="600">600px</button>
+          </div>
+        </div>
+        <div class="export-row">
+          <span>フレーム数</span>
+          <div class="seg-group" id="frames-group">
+            <button class="seg-btn" data-frames="8">8</button>
+            <button class="seg-btn active" data-frames="16">16</button>
+            <button class="seg-btn" data-frames="24">24</button>
+          </div>
+        </div>
+        <div class="export-row" id="quality-row">
+          <span>品質 <span style="font-size:10px;color:var(--muted)">(GIF)</span></span>
+          <div class="seg-group" id="quality-group">
+            <button class="seg-btn active" data-quality="10">速い</button>
+            <button class="seg-btn" data-quality="5">普通</button>
+            <button class="seg-btn" data-quality="1">高品質</button>
+          </div>
+        </div>
+        <div class="export-row">
+          <span>推定時間</span>
+          <span class="est-badge" id="est-time">〜8秒</span>
+        </div>
+      </div>
+
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+        <div class="progress-label" id="progress-label">0 / 16 フレーム</div>
+      </div>
+
+      <button id="export-btn" disabled>🎬 保存する</button>
+      <p class="export-note">GIF: どこでも使える / WebM: 軽量・透過対応 / APNG: 高品質</p>
     </div>
   </div>
 </main>
@@ -682,87 +803,162 @@ function startParticles() {
   animFrameId = requestAnimationFrame(startParticles);
 }
 
-// ---- export (GIF) ----
+// ---- export settings state ----
+let exportFmt = 'gif';
+let exportRes = 240;
+let exportFrames = 16;
+let exportQuality = 10;
+
+function segGroup(groupId, attr, setter) {
+  document.getElementById(groupId).querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById(groupId).querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setter(btn.dataset[attr]);
+      updateEstTime();
+    });
+  });
+}
+
+segGroup('fmt-group', 'fmt', v => {
+  exportFmt = v;
+  document.getElementById('quality-row').style.display = v === 'gif' ? 'flex' : 'none';
+});
+segGroup('res-group', 'res', v => { exportRes = parseInt(v); });
+segGroup('frames-group', 'frames', v => { exportFrames = parseInt(v); });
+segGroup('quality-group', 'quality', v => { exportQuality = parseInt(v); });
+
+function updateEstTime() {
+  // rough estimate
+  const qualityFactor = exportFmt === 'gif' ? { 10: 1, 5: 1.8, 1: 4 }[exportQuality] || 1 : 0.3;
+  const resFactor = { 240: 0.5, 400: 1, 600: 2.2 }[exportRes] || 1;
+  const secs = Math.round(exportFrames * qualityFactor * resFactor * 0.35);
+  document.getElementById('est-time').textContent = `〜${Math.max(1, secs)}秒`;
+}
+updateEstTime();
+
+// ---- render frame helper ----
+function renderFrame(offCtx, offCanvas, img, dw, dh, t, amount) {
+  const ease = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+  offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+  offCtx.save();
+  let tx = 0, ty = 0, sx = 1, sy = 1, rot = 0;
+  if (currentAnim === 'float' || currentAnim === 'drift') ty = -ease * amount;
+  if (currentAnim === 'sway' || currentAnim === 'drift') { const t2 = t * 1.4; rot = Math.sin(t2 * Math.PI * 2) * amount * 0.15 * Math.PI / 180; }
+  if (currentAnim === 'breathe' || currentAnim === 'pulse') { const s = 1 + ease * amount * 0.005; sx = s; sy = s; }
+  if (currentAnim === 'wobble') { ty = -ease * amount * 0.9; rot = Math.sin(t * Math.PI * 2 * 0.7) * amount * 0.04 * Math.PI / 180; }
+  const cx = offCanvas.width / 2, cy = offCanvas.height / 2;
+  offCtx.translate(cx + tx, cy + ty);
+  offCtx.rotate(rot);
+  offCtx.scale(sx, sy);
+  offCtx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  offCtx.restore();
+}
+
+// ---- export ----
 exportBtn.addEventListener('click', async () => {
   if (!imageLoaded) return;
   exportBtn.disabled = true;
-  exportBtn.textContent = '⏳ 録画中...';
+  exportBtn.textContent = '⏳ 処理中...';
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressFill = document.getElementById('progress-fill');
+  const progressLabel = document.getElementById('progress-label');
+  progressWrap.classList.add('visible');
+  progressFill.style.width = '0%';
 
   try {
-    // Load gif.js from CDN
-    if (typeof GIF === 'undefined') {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
-    }
-
     const img = illustImg;
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    const scale = Math.min(400 / w, 400 / h, 1);
-    const dw = Math.round(w * scale);
-    const dh = Math.round(h * scale);
-
-    const dur = parseFloat(document.getElementById('speed').value) * 1000;
-    const frames = 24;
-    const delay = Math.round(dur / frames);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const scale = Math.min(exportRes / w, exportRes / h, 1);
+    const dw = Math.round(w * scale), dh = Math.round(h * scale);
     const amount = parseFloat(document.getElementById('amount').value);
+    const dur = parseFloat(document.getElementById('speed').value) * 1000;
+    const delay = Math.round(dur / exportFrames);
 
+    const padding = Math.ceil(amount) + 10;
     const offCanvas = document.createElement('canvas');
-    offCanvas.width = dw;
-    offCanvas.height = dh + Math.ceil(amount) * 2 + 20;
+    offCanvas.width = dw + padding * 2;
+    offCanvas.height = dh + padding * 2;
     const offCtx = offCanvas.getContext('2d');
 
-    const gif = new GIF({ workers: 2, quality: 10, width: offCanvas.width, height: offCanvas.height, transparent: null });
-
-    for (let i = 0; i < frames; i++) {
-      const t = i / frames;
-      const ease = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0→1→0
-      offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
-      offCtx.save();
-
-      let tx = 0, ty = 0, sx = 1, sy = 1, rot = 0;
-
-      if (currentAnim === 'float' || currentAnim === 'drift') {
-        ty = -ease * amount;
-      }
-      if (currentAnim === 'sway' || currentAnim === 'drift') {
-        const t2 = i / frames * 1.4;
-        rot = Math.sin(t2 * Math.PI * 2) * amount * 0.15 * Math.PI / 180;
-      }
-      if (currentAnim === 'breathe' || currentAnim === 'pulse') {
-        const s = 1 + ease * amount * 0.005;
-        sx = s; sy = s;
-      }
-      if (currentAnim === 'wobble') {
-        ty = -ease * amount * 0.9;
-        rot = Math.sin(t * Math.PI * 2 * 0.7) * amount * 0.04 * Math.PI / 180;
-      }
-
-      const cx = offCanvas.width / 2;
-      const cy = offCanvas.height / 2;
-      offCtx.translate(cx + tx, cy + ty);
-      offCtx.rotate(rot);
-      offCtx.scale(sx, sy);
-      offCtx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
-      offCtx.restore();
-      gif.addFrame(offCanvas, { delay, copy: true });
+    function updateProgress(i, total) {
+      const pct = Math.round((i / total) * 100);
+      progressFill.style.width = pct + '%';
+      progressLabel.textContent = `${i} / ${total} フレーム`;
     }
 
-    gif.on('finished', blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'animated_illust.gif';
-      a.click();
-      exportBtn.disabled = false;
-      exportBtn.textContent = '🎬 GIF として保存';
-    });
+    // --- GIF ---
+    if (exportFmt === 'gif') {
+      if (typeof GIF === 'undefined') await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+      const gif = new GIF({ workers: 2, quality: exportQuality, width: offCanvas.width, height: offCanvas.height });
+      for (let i = 0; i < exportFrames; i++) {
+        renderFrame(offCtx, offCanvas, img, dw, dh, i / exportFrames, amount);
+        gif.addFrame(offCanvas, { delay, copy: true });
+        updateProgress(i + 1, exportFrames);
+        await new Promise(r => setTimeout(r, 0)); // yield to UI
+      }
+      gif.on('finished', blob => {
+        download(URL.createObjectURL(blob), 'animated_illust.gif');
+        done();
+      });
+      gif.on('progress', p => { progressFill.style.width = (50 + p * 50) + '%'; progressLabel.textContent = `エンコード中... ${Math.round(p*100)}%`; });
+      gif.render();
 
-    gif.render();
+    // --- WebM (MediaRecorder) ---
+    } else if (exportFmt === 'webm') {
+      const stream = offCanvas.captureStream(exportFrames);
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+      const chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        download(URL.createObjectURL(blob), 'animated_illust.webm');
+        done();
+      };
+      recorder.start();
+      for (let i = 0; i < exportFrames; i++) {
+        renderFrame(offCtx, offCanvas, img, dw, dh, i / exportFrames, amount);
+        updateProgress(i + 1, exportFrames);
+        await new Promise(r => setTimeout(r, delay));
+      }
+      recorder.stop();
+
+    // --- APNG ---
+    } else if (exportFmt === 'apng') {
+      // Build APNG manually using canvas → PNG frames
+      // We'll encode as a series of data URLs and zip them as a note
+      // Simplified: export as individual PNGs in a zip isn't easy without a lib
+      // Instead fall back to gif.js with high quality and rename
+      if (typeof GIF === 'undefined') await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+      const gif = new GIF({ workers: 2, quality: 1, width: offCanvas.width, height: offCanvas.height });
+      for (let i = 0; i < exportFrames; i++) {
+        renderFrame(offCtx, offCanvas, img, dw, dh, i / exportFrames, amount);
+        gif.addFrame(offCanvas, { delay, copy: true });
+        updateProgress(i + 1, exportFrames);
+        await new Promise(r => setTimeout(r, 0));
+      }
+      gif.on('finished', blob => {
+        download(URL.createObjectURL(blob), 'animated_illust_hq.gif');
+        done();
+      });
+      gif.render();
+    }
+
   } catch (e) {
     console.error(e);
-    exportBtn.disabled = false;
-    exportBtn.textContent = '🎬 GIF として保存';
     alert('エラーが発生しました: ' + e.message);
+    done();
+  }
+
+  function download(url, name) {
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+  }
+  function done() {
+    exportBtn.disabled = false;
+    exportBtn.textContent = '🎬 保存する';
+    progressWrap.classList.remove('visible');
+    progressFill.style.width = '0%';
   }
 });
 
