@@ -274,6 +274,65 @@ input[type=range]::-webkit-slider-thumb {
 
 .hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
 
+/* edit mode */
+#overlay-canvas.edit-mode { pointer-events: all; cursor: crosshair; }
+#overlay-canvas.edit-mode.dragging { cursor: grabbing; }
+
+.edit-bar {
+  display: none;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.edit-bar.visible { display: flex; }
+.edit-tip { flex: 1; min-width: 120px; line-height: 1.5; }
+.edit-tip b { color: var(--text); }
+
+.btn-edit {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-edit:hover { color: var(--text); border-color: var(--accent); }
+.btn-edit.active { background: rgba(167,139,250,0.12); border-color: var(--accent); color: var(--accent); }
+.btn-edit.danger:hover { border-color: #f87171; color: #f87171; }
+
+/* region selector in edit mode */
+.edit-region-select {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.edit-region-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.edit-region-chip.active { border-color: var(--accent); color: var(--text); background: rgba(167,139,250,0.1); }
+.edit-region-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
 @media(max-width:680px){ main{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -303,6 +362,12 @@ input[type=range]::-webkit-slider-thumb {
       <div class="status-dot" id="status-dot"></div>
       <span id="status-text">イラストをアップロードしてください</span>
     </div>
+
+    <!-- edit mode bar -->
+    <div class="edit-bar" id="edit-bar">
+      <div class="edit-tip"><b>編集モード：</b>頂点をドラッグして移動 / 辺をクリックで追加 / 頂点をダブルクリックで削除</div>
+      <button class="btn-edit danger" id="edit-done-btn">✓ 完了</button>
+    </div>
   </div>
 
   <div class="side">
@@ -317,6 +382,7 @@ input[type=range]::-webkit-slider-thumb {
     <div class="panel" id="regions-panel" style="display:none">
       <div class="panel-title">検出された部位</div>
       <div class="region-list" id="region-list"></div>
+      <button class="btn-edit active" id="edit-btn" style="width:100%;margin-top:12px;padding:9px">✏️ ポリゴンを手動調整</button>
     </div>
 
     <!-- animation settings -->
@@ -765,6 +831,315 @@ document.getElementById('amp').addEventListener('input', function() {
 });
 document.getElementById('smooth').addEventListener('input', function() {
   document.getElementById('smooth-val').textContent = parseFloat(this.value).toFixed(2);
+});
+
+// ============================================================
+// POLYGON EDITOR
+// ============================================================
+let editMode = false;
+let editRegionIdx = 0;       // which region is being edited
+let dragVertexIdx = -1;      // vertex being dragged (-1 = none)
+let hoverVertexIdx = -1;
+let hoverEdgeIdx = -1;       // edge (between vertex i and i+1) being hovered
+const VERTEX_RADIUS = 7;     // px hit radius
+const EDGE_HIT = 8;          // px distance to count as edge hover
+
+const editBtn     = document.getElementById('edit-btn');
+const editBar     = document.getElementById('edit-bar');
+const editDoneBtn = document.getElementById('edit-done-btn');
+
+editBtn.addEventListener('click', () => {
+  if (detectedRegions.length === 0) return;
+  enterEditMode();
+});
+editDoneBtn.addEventListener('click', exitEditMode);
+
+function enterEditMode() {
+  editMode = true;
+  editRegionIdx = 0;
+  stopAnim();
+  drawBase();
+  overlayCanvas.classList.add('edit-mode');
+  editBar.classList.add('visible');
+  editBtn.style.display = 'none';
+  renderEditOverlay();
+}
+
+function exitEditMode() {
+  editMode = false;
+  dragVertexIdx = -1;
+  hoverVertexIdx = -1;
+  hoverEdgeIdx = -1;
+  overlayCanvas.classList.remove('edit-mode', 'dragging');
+  editBar.classList.remove('visible');
+  editBtn.style.display = 'block';
+  startAnim();
+}
+
+// --- canvas → normalized coords ---
+function canvasToNorm(cx, cy) {
+  const rect = overlayCanvas.getBoundingClientRect();
+  const scaleX = overlayCanvas.width  / rect.width;
+  const scaleY = overlayCanvas.height / rect.height;
+  return [
+    ((cx - rect.left) * scaleX) / overlayCanvas.width,
+    ((cy - rect.top)  * scaleY) / overlayCanvas.height,
+  ];
+}
+function normToCanvas(nx, ny) {
+  return [nx * overlayCanvas.width, ny * overlayCanvas.height];
+}
+
+// hit test: returns vertex index or -1
+function hitVertex(nx, ny, polygon) {
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const displayScaleX = overlayCanvas.width  / rect.width;
+  const displayScaleY = overlayCanvas.height / rect.height;
+  for (let i = 0; i < polygon.length; i++) {
+    const [vx, vy] = polygon[i];
+    const dx = (nx - vx) * W / displayScaleX;
+    const dy = (ny - vy) * H / displayScaleY;
+    if (Math.sqrt(dx*dx + dy*dy) < VERTEX_RADIUS * 2) return i;
+  }
+  return -1;
+}
+
+// hit test: returns edge index (between i and i+1) or -1
+function hitEdge(nx, ny, polygon) {
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+  for (let i = 0; i < polygon.length; i++) {
+    const j = (i + 1) % polygon.length;
+    const [ax, ay] = [polygon[i][0] * W, polygon[i][1] * H];
+    const [bx, by] = [polygon[j][0] * W, polygon[j][1] * H];
+    const px = nx * W, py = ny * H;
+    // distance from point to segment
+    const ab2 = (bx-ax)**2 + (by-ay)**2;
+    if (ab2 === 0) continue;
+    const t = Math.max(0, Math.min(1, ((px-ax)*(bx-ax)+(py-ay)*(by-ay)) / ab2));
+    const dx = px - (ax + t*(bx-ax));
+    const dy = py - (ay + t*(by-ay));
+    if (Math.sqrt(dx*dx+dy*dy) < EDGE_HIT * 2) return i;
+  }
+  return -1;
+}
+
+// --- pointer events ---
+overlayCanvas.addEventListener('mousedown', onPointerDown);
+overlayCanvas.addEventListener('mousemove', onPointerMove);
+overlayCanvas.addEventListener('mouseup',   onPointerUp);
+overlayCanvas.addEventListener('dblclick',  onDblClick);
+overlayCanvas.addEventListener('contextmenu', e => { e.preventDefault(); });
+
+// touch
+overlayCanvas.addEventListener('touchstart',  e => { e.preventDefault(); onPointerDown(e.touches[0]); }, { passive: false });
+overlayCanvas.addEventListener('touchmove',   e => { e.preventDefault(); onPointerMove(e.touches[0]); }, { passive: false });
+overlayCanvas.addEventListener('touchend',    e => { e.preventDefault(); onPointerUp(e.changedTouches[0]); }, { passive: false });
+
+function onPointerDown(e) {
+  if (!editMode) return;
+  const [nx, ny] = canvasToNorm(e.clientX, e.clientY);
+  const poly = detectedRegions[editRegionIdx].polygon;
+
+  const vi = hitVertex(nx, ny, poly);
+  if (vi !== -1) {
+    dragVertexIdx = vi;
+    overlayCanvas.classList.add('dragging');
+    return;
+  }
+
+  // click on edge → insert vertex
+  const ei = hitEdge(nx, ny, poly);
+  if (ei !== -1) {
+    poly.splice(ei + 1, 0, [nx, ny]);
+    dragVertexIdx = ei + 1;
+    overlayCanvas.classList.add('dragging');
+    renderEditOverlay();
+  }
+}
+
+function onPointerMove(e) {
+  if (!editMode) return;
+  const [nx, ny] = canvasToNorm(e.clientX, e.clientY);
+  const poly = detectedRegions[editRegionIdx].polygon;
+
+  if (dragVertexIdx !== -1) {
+    // clamp to [0,1]
+    poly[dragVertexIdx] = [Math.max(0, Math.min(1, nx)), Math.max(0, Math.min(1, ny))];
+    renderEditOverlay();
+    return;
+  }
+
+  // hover detection for cursor feedback
+  const vi = hitVertex(nx, ny, poly);
+  const ei = vi === -1 ? hitEdge(nx, ny, poly) : -1;
+  if (vi !== hoverVertexIdx || ei !== hoverEdgeIdx) {
+    hoverVertexIdx = vi;
+    hoverEdgeIdx   = ei;
+    overlayCanvas.style.cursor = vi !== -1 ? 'grab' : ei !== -1 ? 'cell' : 'crosshair';
+    renderEditOverlay();
+  }
+}
+
+function onPointerUp(e) {
+  if (!editMode) return;
+  dragVertexIdx = -1;
+  overlayCanvas.classList.remove('dragging');
+}
+
+function onDblClick(e) {
+  if (!editMode) return;
+  const [nx, ny] = canvasToNorm(e.clientX, e.clientY);
+  const poly = detectedRegions[editRegionIdx].polygon;
+  if (poly.length <= 3) return; // keep at least triangle
+  const vi = hitVertex(nx, ny, poly);
+  if (vi !== -1) {
+    poly.splice(vi, 1);
+    renderEditOverlay();
+  }
+}
+
+// --- draw edit overlay ---
+function renderEditOverlay() {
+  oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+
+  detectedRegions.forEach((region, ri) => {
+    if (!region.polygon || region.polygon.length < 2) return;
+    const isActive = ri === editRegionIdx;
+    const color = region.color;
+
+    oCtx.beginPath();
+    region.polygon.forEach(([px, py], idx) => {
+      const [x, y] = normToCanvas(px, py);
+      idx === 0 ? oCtx.moveTo(x, y) : oCtx.lineTo(x, y);
+    });
+    oCtx.closePath();
+
+    if (isActive) {
+      oCtx.fillStyle = color + '28';
+      oCtx.fill();
+      oCtx.strokeStyle = color;
+      oCtx.lineWidth = 2;
+      oCtx.setLineDash([]);
+      oCtx.stroke();
+
+      // draw edges with hover highlight
+      for (let i = 0; i < region.polygon.length; i++) {
+        const j = (i + 1) % region.polygon.length;
+        const [ax, ay] = normToCanvas(...region.polygon[i]);
+        const [bx, by] = normToCanvas(...region.polygon[j]);
+        oCtx.beginPath();
+        oCtx.moveTo(ax, ay);
+        oCtx.lineTo(bx, by);
+        oCtx.strokeStyle = i === hoverEdgeIdx ? '#ffffff88' : color + 'aa';
+        oCtx.lineWidth = i === hoverEdgeIdx ? 3 : 1.5;
+        oCtx.stroke();
+      }
+
+      // draw vertices
+      region.polygon.forEach(([px, py], vi) => {
+        const [x, y] = normToCanvas(px, py);
+        const isHover = vi === hoverVertexIdx;
+        const isDrag  = vi === dragVertexIdx;
+
+        // outer ring
+        oCtx.beginPath();
+        oCtx.arc(x, y, isDrag ? 10 : isHover ? 9 : 6, 0, Math.PI * 2);
+        oCtx.fillStyle = isDrag ? color : isHover ? color + 'cc' : color + '66';
+        oCtx.fill();
+
+        // white center dot
+        oCtx.beginPath();
+        oCtx.arc(x, y, 3, 0, Math.PI * 2);
+        oCtx.fillStyle = '#fff';
+        oCtx.fill();
+      });
+
+      // draw anchor point
+      if (region.anchor) {
+        const [ax, ay] = normToCanvas(region.anchor[0], region.anchor[1]);
+        oCtx.beginPath();
+        oCtx.arc(ax, ay, 5, 0, Math.PI * 2);
+        oCtx.fillStyle = '#fbbf24aa';
+        oCtx.fill();
+        oCtx.strokeStyle = '#fbbf24';
+        oCtx.lineWidth = 1.5;
+        oCtx.stroke();
+        // cross
+        oCtx.beginPath();
+        oCtx.moveTo(ax-7, ay); oCtx.lineTo(ax+7, ay);
+        oCtx.moveTo(ax, ay-7); oCtx.lineTo(ax, ay+7);
+        oCtx.strokeStyle = '#fbbf24';
+        oCtx.lineWidth = 1;
+        oCtx.stroke();
+      }
+    } else {
+      // non-active regions: dim outline only
+      oCtx.strokeStyle = color + '44';
+      oCtx.lineWidth = 1;
+      oCtx.setLineDash([3, 4]);
+      oCtx.stroke();
+      oCtx.setLineDash([]);
+    }
+  });
+
+  // region selector tabs at top of overlay
+  renderEditTabs();
+}
+
+function renderEditTabs() {
+  const W = overlayCanvas.width;
+  let x = 8;
+  const y = 8;
+  const h = 22;
+  const pad = 10;
+
+  detectedRegions.forEach((region, i) => {
+    const label = region.label;
+    oCtx.font = '11px Syne, sans-serif';
+    const tw = oCtx.measureText(label).width;
+    const w = tw + pad * 2;
+    const isActive = i === editRegionIdx;
+
+    // bg
+    oCtx.fillStyle = isActive ? region.color + 'dd' : '#0f101888';
+    oCtx.beginPath();
+    oCtx.roundRect(x, y, w, h, 5);
+    oCtx.fill();
+    if (isActive) {
+      oCtx.strokeStyle = region.color;
+      oCtx.lineWidth = 1;
+      oCtx.stroke();
+    }
+
+    oCtx.fillStyle = isActive ? '#fff' : region.color + 'aa';
+    oCtx.fillText(label, x + pad, y + 15);
+
+    // store tab bounds for click detection
+    region._tab = { x, y, w, h };
+    x += w + 5;
+  });
+}
+
+// tab click in edit mode
+overlayCanvas.addEventListener('click', e => {
+  if (!editMode) return;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const scaleX = overlayCanvas.width  / rect.width;
+  const scaleY = overlayCanvas.height / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top)  * scaleY;
+
+  detectedRegions.forEach((region, i) => {
+    const t = region._tab;
+    if (t && cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h) {
+      editRegionIdx = i;
+      hoverVertexIdx = -1;
+      hoverEdgeIdx   = -1;
+      renderEditOverlay();
+    }
+  });
 });
 </script>
 </body>
