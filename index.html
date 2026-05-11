@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>illust animator</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a23;
+    --surface2: #1e2433;
+    --border: #2a3048;
+    --accent: #7eb8f7;
+    --accent2: #b8a4f7;
+    --text: #e8ecf4;
+    --muted: #6b7494;
+    --glow: rgba(126, 184, 247, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* header */
+  header {
+    width: 100%;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--accent2); }
+  .tagline {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin-left: auto;
+  }
+
+  /* main layout */
+  main {
+    width: 100%;
+    max-width: 1100px;
+    padding: 32px 24px;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+  }
+
+  /* canvas area */
+  .canvas-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 480px;
+    position: relative;
+    overflow: hidden;
+  }
+  .canvas-area::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* drop zone */
+  #dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    cursor: pointer;
+    padding: 48px;
+    text-align: center;
+    transition: opacity 0.2s;
+  }
+  #dropzone.hidden { display: none; }
+  #dropzone:hover { opacity: 0.8; }
+
+  .drop-icon {
+    width: 64px;
+    height: 64px;
+    border: 2px dashed var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: var(--muted);
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #dropzone:hover .drop-icon,
+  .canvas-area.dragover .drop-icon {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .drop-label {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .drop-label strong { color: var(--text); display: block; font-size: 15px; margin-bottom: 4px; }
+
+  /* image preview */
+  #preview-container {
+    display: none;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    padding: 32px;
+  }
+  #preview-container.visible { display: flex; }
+
+  #illust-img {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: 8px;
+    transform-origin: center center;
+    will-change: transform, filter;
+  }
+
+  /* animation classes */
+  #illust-img.anim-float {
+    animation: floatY var(--dur, 3s) ease-in-out infinite;
+  }
+  #illust-img.anim-sway {
+    animation: sway var(--dur, 3s) ease-in-out infinite;
+  }
+  #illust-img.anim-breathe {
+    animation: breathe var(--dur, 3s) ease-in-out infinite;
+  }
+  #illust-img.anim-pulse {
+    animation: pulse var(--dur, 3s) ease-in-out infinite;
+  }
+  #illust-img.anim-wobble {
+    animation: wobble var(--dur, 3s) ease-in-out infinite;
+  }
+  #illust-img.anim-drift {
+    animation: floatY var(--dur, 3s) ease-in-out infinite, sway calc(var(--dur, 3s) * 1.4) ease-in-out infinite;
+  }
+
+  @keyframes floatY {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(calc(var(--amount, 12) * -1px)); }
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(calc(var(--amount, 2) * 1deg)); }
+    75% { transform: rotate(calc(var(--amount, 2) * -1deg)); }
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(calc(1 + var(--amount, 4) * 0.005)); }
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(calc(1 + var(--amount, 4) * 0.005)); filter: brightness(1.08); }
+  }
+  @keyframes wobble {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    20% { transform: translateY(calc(var(--amount, 6) * -0.8px)) rotate(calc(var(--amount, 2) * 0.5deg)); }
+    60% { transform: translateY(calc(var(--amount, 6) * -1px)) rotate(calc(var(--amount, 2) * -0.5deg)); }
+    80% { transform: translateY(calc(var(--amount, 6) * -0.3px)) rotate(0deg); }
+  }
+
+  /* shadow glow effect */
+  #illust-img.glow-on {
+    filter: drop-shadow(0 0 20px var(--glow-color, rgba(126,184,247,0.5)));
+  }
+  #illust-img.anim-pulse.glow-on {
+    animation: floatY var(--dur, 3s) ease-in-out infinite, pulseGlow var(--dur, 3s) ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { filter: drop-shadow(0 0 10px var(--glow-color, rgba(126,184,247,0.3))); }
+    50% { filter: drop-shadow(0 0 30px var(--glow-color, rgba(126,184,247,0.7))); }
+  }
+
+  /* particles */
+  #particle-canvas {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  #particle-canvas.active { opacity: 1; }
+
+  /* change button */
+  #change-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.05em;
+    transition: color 0.2s, border-color 0.2s;
+    z-index: 10;
+  }
+  #change-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* controls panel */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* anim buttons */
+  .anim-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .anim-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 10px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    line-height: 1.3;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  .anim-btn:hover { color: var(--text); border-color: var(--accent); }
+  .anim-btn.active {
+    background: rgba(126,184,247,0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .anim-btn .emoji { font-size: 18px; display: block; margin-bottom: 4px; }
+
+  /* sliders */
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .slider-label span { color: var(--text); font-family: 'Space Mono', monospace; font-size: 11px; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 6px rgba(126,184,247,0.4);
+  }
+
+  /* toggle row */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+  }
+  .toggle input { display: none; }
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 10px;
+    transition: background 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(16px); }
+
+  /* glow color */
+  .color-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .color-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .color-dot:hover { transform: scale(1.15); }
+  .color-dot.active { border-color: white; }
+
+  /* export */
+  #export-btn {
+    width: 100%;
+    background: linear-gradient(135deg, rgba(126,184,247,0.2), rgba(184,164,247,0.2));
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    color: var(--accent);
+    font-size: 13px;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    padding: 14px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.2s, transform 0.1s;
+  }
+  #export-btn:hover { background: rgba(126,184,247,0.25); }
+  #export-btn:active { transform: scale(0.98); }
+  #export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .export-note {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* hidden input */
+  #file-input { display: none; }
+
+  /* drag highlight */
+  .canvas-area.dragover { border-color: var(--accent); }
+  .canvas-area.dragover::before {
+    background: radial-gradient(ellipse at 50% 50%, rgba(126,184,247,0.2) 0%, transparent 70%);
+  }
+
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">illust<span>.</span>animator</div>
+  <div class="tagline">upload → animate → export</div>
+</header>
+
+<main>
+  <!-- canvas area -->
+  <div class="canvas-area" id="canvas-area">
+    <canvas id="particle-canvas"></canvas>
+
+    <div id="dropzone">
+      <div class="drop-icon">🖼️</div>
+      <div class="drop-label">
+        <strong>イラストをドロップ</strong>
+        クリックしてファイルを選択<br>
+        <small style="font-size:11px;color:var(--muted)">PNG / JPG / GIF / WebP / SVG</small>
+      </div>
+    </div>
+
+    <div id="preview-container">
+      <button id="change-btn">変更</button>
+      <img id="illust-img" src="" alt="illust">
+    </div>
+  </div>
+
+  <!-- controls -->
+  <div class="controls">
+
+    <!-- animation type -->
+    <div class="panel">
+      <div class="panel-title">アニメーション</div>
+      <div class="anim-grid">
+        <button class="anim-btn active" data-anim="float">
+          <span class="emoji">🌸</span>ふわふわ
+        </button>
+        <button class="anim-btn" data-anim="sway">
+          <span class="emoji">🌿</span>ゆらゆら
+        </button>
+        <button class="anim-btn" data-anim="breathe">
+          <span class="emoji">💫</span>呼吸する
+        </button>
+        <button class="anim-btn" data-anim="pulse">
+          <span class="emoji">✨</span>脈打つ
+        </button>
+        <button class="anim-btn" data-anim="wobble">
+          <span class="emoji">🎈</span>ぷかぷか
+        </button>
+        <button class="anim-btn" data-anim="drift">
+          <span class="emoji">☁️</span>たゆたう
+        </button>
+      </div>
+    </div>
+
+    <!-- parameters -->
+    <div class="panel">
+      <div class="panel-title">パラメーター</div>
+
+      <div class="slider-row">
+        <div class="slider-label">スピード <span id="speed-val">3.0s</span></div>
+        <input type="range" id="speed" min="1" max="8" step="0.5" value="3">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">動きの大きさ <span id="amount-val">12</span></div>
+        <input type="range" id="amount" min="2" max="30" step="1" value="12">
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+
+      <div class="toggle-row">
+        <span>グロー効果</span>
+        <label class="toggle">
+          <input type="checkbox" id="glow-toggle">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span>パーティクル</span>
+        <label class="toggle">
+          <input type="checkbox" id="particle-toggle">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+
+      <div id="glow-colors" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">グロー色</div>
+        <div class="color-row">
+          <div class="color-dot active" data-color="rgba(126,184,247,0.7)" style="background:#7eb8f7"></div>
+          <div class="color-dot" data-color="rgba(247,150,200,0.7)" style="background:#f796c8"></div>
+          <div class="color-dot" data-color="rgba(184,247,164,0.7)" style="background:#b8f7a4"></div>
+          <div class="color-dot" data-color="rgba(247,220,126,0.7)" style="background:#f7dc7e"></div>
+          <div class="color-dot" data-color="rgba(200,150,247,0.7)" style="background:#c896f7"></div>
+          <div class="color-dot" data-color="rgba(255,255,255,0.5)" style="background:#ffffff"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- export -->
+    <div class="panel">
+      <div class="panel-title">エクスポート</div>
+      <button id="export-btn" disabled>🎬 GIF として保存</button>
+      <p class="export-note">※ GIF出力には gif.js を使用します<br>ブラウザで直接録画・ダウンロード</p>
+    </div>
+  </div>
+</main>
+
+<input type="file" id="file-input" accept="image/*">
+
+<script>
+// ---- state ----
+let currentAnim = 'float';
+let glowColor = 'rgba(126,184,247,0.7)';
+let particlesActive = false;
+let particles = [];
+let animFrameId = null;
+let imageLoaded = false;
+
+// ---- DOM ----
+const dropzone = document.getElementById('dropzone');
+const previewContainer = document.getElementById('preview-container');
+const illustImg = document.getElementById('illust-img');
+const canvasArea = document.getElementById('canvas-area');
+const fileInput = document.getElementById('file-input');
+const changeBtn = document.getElementById('change-btn');
+const particleCanvas = document.getElementById('particle-canvas');
+const ctx = particleCanvas.getContext('2d');
+const exportBtn = document.getElementById('export-btn');
+
+// ---- file handling ----
+dropzone.addEventListener('click', () => fileInput.click());
+changeBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+canvasArea.addEventListener('dragover', e => { e.preventDefault(); canvasArea.classList.add('dragover'); });
+canvasArea.addEventListener('dragleave', () => canvasArea.classList.remove('dragover'));
+canvasArea.addEventListener('drop', e => {
+  e.preventDefault();
+  canvasArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadFile(file);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  illustImg.src = url;
+  illustImg.onload = () => {
+    dropzone.classList.add('hidden');
+    previewContainer.classList.add('visible');
+    imageLoaded = true;
+    exportBtn.disabled = false;
+    applyAnim(currentAnim);
+    resizeParticleCanvas();
+  };
+}
+
+// ---- animation ----
+document.querySelectorAll('.anim-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentAnim = btn.dataset.anim;
+    applyAnim(currentAnim);
+  });
+});
+
+function applyAnim(name) {
+  illustImg.className = '';
+  illustImg.classList.add('anim-' + name);
+  if (document.getElementById('glow-toggle').checked) illustImg.classList.add('glow-on');
+  illustImg.style.setProperty('--dur', document.getElementById('speed').value + 's');
+  illustImg.style.setProperty('--amount', document.getElementById('amount').value);
+  illustImg.style.setProperty('--glow-color', glowColor);
+}
+
+// ---- sliders ----
+document.getElementById('speed').addEventListener('input', function() {
+  document.getElementById('speed-val').textContent = this.value + '.0s'.replace('.0s', 's');
+  document.getElementById('speed-val').textContent = parseFloat(this.value).toFixed(1) + 's';
+  illustImg.style.setProperty('--dur', this.value + 's');
+});
+document.getElementById('amount').addEventListener('input', function() {
+  document.getElementById('amount-val').textContent = this.value;
+  illustImg.style.setProperty('--amount', this.value);
+});
+
+// ---- glow ----
+document.getElementById('glow-toggle').addEventListener('change', function() {
+  document.getElementById('glow-colors').style.display = this.checked ? 'block' : 'none';
+  if (this.checked) {
+    illustImg.classList.add('glow-on');
+  } else {
+    illustImg.classList.remove('glow-on');
+  }
+  applyAnim(currentAnim);
+});
+
+document.querySelectorAll('.color-dot').forEach(dot => {
+  dot.addEventListener('click', function() {
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+    this.classList.add('active');
+    glowColor = this.dataset.color;
+    illustImg.style.setProperty('--glow-color', glowColor);
+    applyAnim(currentAnim);
+  });
+});
+
+// ---- particles ----
+document.getElementById('particle-toggle').addEventListener('change', function() {
+  particlesActive = this.checked;
+  if (particlesActive) {
+    particleCanvas.classList.add('active');
+    startParticles();
+  } else {
+    particleCanvas.classList.remove('active');
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    particles = [];
+    ctx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+  }
+});
+
+function resizeParticleCanvas() {
+  particleCanvas.width = canvasArea.offsetWidth;
+  particleCanvas.height = canvasArea.offsetHeight;
+}
+
+window.addEventListener('resize', () => {
+  resizeParticleCanvas();
+  if (!particlesActive) ctx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+});
+
+function spawnParticle() {
+  const w = particleCanvas.width;
+  const h = particleCanvas.height;
+  return {
+    x: Math.random() * w,
+    y: h + 10,
+    vx: (Math.random() - 0.5) * 0.8,
+    vy: -(Math.random() * 1.2 + 0.4),
+    size: Math.random() * 4 + 2,
+    life: 1,
+    decay: Math.random() * 0.008 + 0.003,
+    color: ['#7eb8f7','#f796c8','#b8f7a4','#f7dc7e','#c896f7','#ffffff'][Math.floor(Math.random()*6)],
+  };
+}
+
+function startParticles() {
+  if (!particlesActive) return;
+  if (Math.random() < 0.08) particles.push(spawnParticle());
+
+  ctx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    // sparkle
+    ctx.globalAlpha = p.life * 0.4;
+    ctx.fillRect(p.x - p.size * 1.5 * p.life, p.y, p.size * 3 * p.life, 1);
+    ctx.fillRect(p.x, p.y - p.size * 1.5 * p.life, 1, p.size * 3 * p.life);
+  });
+  ctx.globalAlpha = 1;
+
+  animFrameId = requestAnimationFrame(startParticles);
+}
+
+// ---- export (GIF) ----
+exportBtn.addEventListener('click', async () => {
+  if (!imageLoaded) return;
+  exportBtn.disabled = true;
+  exportBtn.textContent = '⏳ 録画中...';
+
+  try {
+    // Load gif.js from CDN
+    if (typeof GIF === 'undefined') {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+    }
+
+    const img = illustImg;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const scale = Math.min(400 / w, 400 / h, 1);
+    const dw = Math.round(w * scale);
+    const dh = Math.round(h * scale);
+
+    const dur = parseFloat(document.getElementById('speed').value) * 1000;
+    const frames = 24;
+    const delay = Math.round(dur / frames);
+    const amount = parseFloat(document.getElementById('amount').value);
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = dw;
+    offCanvas.height = dh + Math.ceil(amount) * 2 + 20;
+    const offCtx = offCanvas.getContext('2d');
+
+    const gif = new GIF({ workers: 2, quality: 10, width: offCanvas.width, height: offCanvas.height, transparent: null });
+
+    for (let i = 0; i < frames; i++) {
+      const t = i / frames;
+      const ease = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0→1→0
+      offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+      offCtx.save();
+
+      let tx = 0, ty = 0, sx = 1, sy = 1, rot = 0;
+
+      if (currentAnim === 'float' || currentAnim === 'drift') {
+        ty = -ease * amount;
+      }
+      if (currentAnim === 'sway' || currentAnim === 'drift') {
+        const t2 = i / frames * 1.4;
+        rot = Math.sin(t2 * Math.PI * 2) * amount * 0.15 * Math.PI / 180;
+      }
+      if (currentAnim === 'breathe' || currentAnim === 'pulse') {
+        const s = 1 + ease * amount * 0.005;
+        sx = s; sy = s;
+      }
+      if (currentAnim === 'wobble') {
+        ty = -ease * amount * 0.9;
+        rot = Math.sin(t * Math.PI * 2 * 0.7) * amount * 0.04 * Math.PI / 180;
+      }
+
+      const cx = offCanvas.width / 2;
+      const cy = offCanvas.height / 2;
+      offCtx.translate(cx + tx, cy + ty);
+      offCtx.rotate(rot);
+      offCtx.scale(sx, sy);
+      offCtx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+      offCtx.restore();
+      gif.addFrame(offCanvas, { delay, copy: true });
+    }
+
+    gif.on('finished', blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'animated_illust.gif';
+      a.click();
+      exportBtn.disabled = false;
+      exportBtn.textContent = '🎬 GIF として保存';
+    });
+
+    gif.render();
+  } catch (e) {
+    console.error(e);
+    exportBtn.disabled = false;
+    exportBtn.textContent = '🎬 GIF として保存';
+    alert('エラーが発生しました: ' + e.message);
+  }
+});
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// init
+resizeParticleCanvas();
+</script>
+</body>
+</html>
