@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hair animator — AI部位検出</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --border: #252535;
+  --accent: #a78bfa;
+  --accent2: #f472b6;
+  --text: #e2e0ff;
+  --muted: #5a5880;
+  --glow: rgba(167,139,250,0.15);
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+header {
+  width: 100%;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(10,10,15,0.8);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.logo em { color: var(--accent2); font-style: normal; }
+.badge {
+  font-size: 10px;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.3);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.08em;
+}
+main {
+  width: 100%;
+  max-width: 1060px;
+  padding: 28px 20px;
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  gap: 20px;
+}
+
+/* ---- canvas area ---- */
+.canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.canvas-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  min-height: 460px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.canvas-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 65%);
+  pointer-events: none;
+}
+#main-canvas {
+  max-width: 100%;
+  max-height: 460px;
+  display: block;
+  border-radius: 8px;
+}
+#dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px;
+  cursor: pointer;
+  text-align: center;
+}
+#dropzone.hidden { display: none; }
+.drop-ring {
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  border: 2px dashed var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+  transition: border-color 0.2s;
+}
+#dropzone:hover .drop-ring { border-color: var(--accent); }
+.drop-text { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.drop-text strong { color: var(--text); display: block; font-size: 14px; }
+
+/* status bar */
+.status-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s ease-in-out infinite; }
+.status-dot.done { background: #4ade80; box-shadow: 0 0 6px #4ade80; animation: none; }
+.status-dot.error { background: #f87171; animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ---- side panel ---- */
+.side { display: flex; flex-direction: column; gap: 16px; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+.panel-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+/* region chips */
+.region-list { display: flex; flex-direction: column; gap: 8px; }
+.region-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-size: 13px;
+}
+.region-item:hover { border-color: var(--accent); }
+.region-item.active { border-color: var(--accent); background: rgba(167,139,250,0.08); }
+.region-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.region-label { flex: 1; }
+.region-toggle {
+  width: 28px; height: 16px;
+  border-radius: 8px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.region-toggle.on { background: var(--accent); }
+.region-toggle::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: white;
+  top: 2px; left: 2px;
+  transition: transform 0.2s;
+}
+.region-toggle.on::after { transform: translateX(12px); }
+
+/* sliders */
+.slider-row { margin-bottom: 12px; }
+.slider-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.slider-label span { color: var(--text); font-family: 'Syne', sans-serif; font-size: 11px; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 3px;
+  background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg);
+  box-shadow: 0 0 5px rgba(167,139,250,0.5);
+}
+
+/* buttons */
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(244,114,182,0.15));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  letter-spacing: 0.03em;
+}
+.btn-primary:hover { background: rgba(167,139,250,0.25); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-secondary {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 10px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-top: 8px;
+}
+.btn-secondary:hover { color: var(--text); border-color: var(--accent); }
+
+/* overlay canvas */
+#overlay-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+#file-input { display: none; }
+.canvas-box.dragover { border-color: var(--accent); }
+
+/* anim type */
+.anim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.anim-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.anim-chip:hover { color: var(--text); border-color: var(--accent); }
+.anim-chip.active { background: rgba(167,139,250,0.1); border-color: var(--accent); color: var(--accent); }
+.anim-chip .ic { font-size: 15px; display: block; margin-bottom: 3px; }
+
+.hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
+
+@media(max-width:680px){ main{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <a href="index.html" style="font-size:11px;color:var(--muted);text-decoration:none;font-family:'Syne',sans-serif;letter-spacing:0.05em;transition:color 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">← ツール一覧</a>
+  <div class="logo" style="margin-left:4px">hair<em>.</em>animator</div>
+  <div class="badge">AI 部位検出</div>
+</header>
+
+<main>
+  <div class="canvas-wrap">
+    <div class="canvas-box" id="canvas-box">
+      <div id="dropzone">
+        <div class="drop-ring">🧑‍🎨</div>
+        <div class="drop-text">
+          <strong>イラストをドロップ</strong>
+          クリックして選択<br>
+          <small>PNG / JPG / WebP</small>
+        </div>
+      </div>
+      <canvas id="main-canvas" style="display:none"></canvas>
+      <canvas id="overlay-canvas" style="display:none"></canvas>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">イラストをアップロードしてください</span>
+    </div>
+  </div>
+
+  <div class="side">
+    <!-- AI detect -->
+    <div class="panel">
+      <div class="panel-title">AI 部位検出</div>
+      <button class="btn-primary" id="detect-btn" disabled>✨ 部位を自動検出</button>
+      <p class="hint">AIがイラストを解析して、動かせる部位（髪・スカート・リボンなど）を自動的に特定します。</p>
+    </div>
+
+    <!-- detected regions -->
+    <div class="panel" id="regions-panel" style="display:none">
+      <div class="panel-title">検出された部位</div>
+      <div class="region-list" id="region-list"></div>
+    </div>
+
+    <!-- animation settings -->
+    <div class="panel" id="anim-panel" style="display:none">
+      <div class="panel-title">アニメーション設定</div>
+      <div class="anim-grid" id="anim-type-grid">
+        <button class="anim-chip active" data-anim="sway"><span class="ic">🌿</span>ゆらゆら</button>
+        <button class="anim-chip" data-anim="flutter"><span class="ic">🍃</span>なびく</button>
+        <button class="anim-chip" data-anim="bounce"><span class="ic">🎀</span>はずむ</button>
+        <button class="anim-chip" data-anim="wave"><span class="ic">🌊</span>波打つ</button>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+
+      <div class="slider-row">
+        <div class="slider-label">スピード <span id="spd-val">2.5s</span></div>
+        <input type="range" id="spd" min="0.8" max="5" step="0.1" value="2.5">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">揺れ幅 <span id="amp-val">12</span></div>
+        <input type="range" id="amp" min="3" max="30" step="1" value="12">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">なめらかさ <span id="smooth-val">0.6</span></div>
+        <input type="range" id="smooth" min="0.1" max="1" step="0.05" value="0.6">
+      </div>
+    </div>
+
+    <!-- change image -->
+    <button class="btn-secondary" id="change-btn" style="display:none">画像を変更</button>
+  </div>
+</main>
+
+<input type="file" id="file-input" accept="image/*">
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let imageFile = null;
+let imageEl = null;
+let imageLoaded = false;
+let detectedRegions = []; // [{label, color, polygon, enabled, animOffset}]
+let animType = 'sway';
+let rafId = null;
+let startTime = null;
+
+const REGION_COLORS = ['#a78bfa','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171'];
+
+// ============================================================
+// DOM
+// ============================================================
+const dropzone    = document.getElementById('dropzone');
+const canvasBox   = document.getElementById('canvas-box');
+const mainCanvas  = document.getElementById('main-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const mCtx        = mainCanvas.getContext('2d');
+const oCtx        = overlayCanvas.getContext('2d');
+const fileInput   = document.getElementById('file-input');
+const detectBtn   = document.getElementById('detect-btn');
+const regionsPanel= document.getElementById('regions-panel');
+const animPanel   = document.getElementById('anim-panel');
+const regionList  = document.getElementById('region-list');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const changeBtn   = document.getElementById('change-btn');
+
+// ============================================================
+// FILE LOAD
+// ============================================================
+dropzone.addEventListener('click', () => fileInput.click());
+changeBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => e.target.files[0] && loadImage(e.target.files[0]));
+canvasBox.addEventListener('dragover', e => { e.preventDefault(); canvasBox.classList.add('dragover'); });
+canvasBox.addEventListener('dragleave', () => canvasBox.classList.remove('dragover'));
+canvasBox.addEventListener('drop', e => {
+  e.preventDefault(); canvasBox.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadImage(f);
+});
+
+function loadImage(file) {
+  imageFile = file;
+  const url = URL.createObjectURL(file);
+  imageEl = new Image();
+  imageEl.onload = () => {
+    imageLoaded = true;
+    const maxW = canvasBox.offsetWidth - 32;
+    const maxH = 440;
+    const scale = Math.min(maxW / imageEl.naturalWidth, maxH / imageEl.naturalHeight, 1);
+    mainCanvas.width  = Math.round(imageEl.naturalWidth * scale);
+    mainCanvas.height = Math.round(imageEl.naturalHeight * scale);
+    overlayCanvas.width  = mainCanvas.width;
+    overlayCanvas.height = mainCanvas.height;
+
+    // center canvas in box
+    mainCanvas.style.display = 'block';
+    overlayCanvas.style.display = 'block';
+    overlayCanvas.style.width  = mainCanvas.width + 'px';
+    overlayCanvas.style.height = mainCanvas.height + 'px';
+    overlayCanvas.style.left   = mainCanvas.offsetLeft + 'px';
+    overlayCanvas.style.top    = mainCanvas.offsetTop + 'px';
+
+    drawBase();
+    dropzone.classList.add('hidden');
+    detectBtn.disabled = false;
+    changeBtn.style.display = 'block';
+    detectedRegions = [];
+    regionsPanel.style.display = 'none';
+    animPanel.style.display = 'none';
+    stopAnim();
+    setStatus('idle', 'イラスト読み込み完了。「部位を自動検出」を押してください。');
+  };
+  imageEl.src = url;
+}
+
+function drawBase() {
+  mCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+  mCtx.drawImage(imageEl, 0, 0, mainCanvas.width, mainCanvas.height);
+}
+
+// ============================================================
+// STATUS
+// ============================================================
+function setStatus(state, msg) {
+  statusDot.className = 'status-dot' + (state === 'loading' ? ' active' : state === 'done' ? ' done' : state === 'error' ? ' error' : '');
+  statusText.textContent = msg;
+}
+
+// ============================================================
+// AI DETECTION
+// ============================================================
+detectBtn.addEventListener('click', async () => {
+  if (!imageLoaded) return;
+  detectBtn.disabled = true;
+  setStatus('loading', 'AIが部位を解析中...');
+
+  try {
+    // Convert image to base64
+    const base64 = await fileToBase64(imageFile);
+    const mimeType = imageFile.type || 'image/png';
+
+    const prompt = `このイラスト画像を解析して、アニメーション（揺らすこと）に適した部位を検出してください。
+
+以下のJSON形式のみで返答してください（説明文・マークダウン不要）:
+{
+  "regions": [
+    {
+      "label": "部位名（日本語、例: 髪の毛、スカート、リボン、袖、尻尾など）",
+      "polygon": [[x1,y1],[x2,y2],...],
+      "anchor": [ax, ay],
+      "description": "どんな動きが自然か一言で"
+    }
+  ]
+}
+
+重要なルール:
+- polygonの座標は画像の幅・高さに対する0〜1の比率で指定（例: 0.5 = 中央）
+- anchorは揺れの起点（根元）となる点
+- 最大5部位まで
+- 動かせそうな部位がない場合は regions: [] を返す
+- 必ずJSONのみ返すこと、前後に文字を入れないこと`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const raw = data.content.find(b => b.type === 'text')?.text || '';
+
+    // parse JSON (strip possible markdown fences)
+    const jsonStr = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    const regions = parsed.regions || [];
+
+    if (regions.length === 0) {
+      setStatus('error', '動かせる部位が見つかりませんでした。別のイラストを試してみてください。');
+      detectBtn.disabled = false;
+      return;
+    }
+
+    // Store with color and enabled state
+    detectedRegions = regions.map((r, i) => ({
+      ...r,
+      color: REGION_COLORS[i % REGION_COLORS.length],
+      enabled: true,
+      animOffset: Math.random() * Math.PI * 2,
+    }));
+
+    renderRegionList();
+    drawOverlay();
+    startAnim();
+
+    regionsPanel.style.display = 'block';
+    animPanel.style.display = 'block';
+    setStatus('done', `${detectedRegions.length}つの部位を検出しました。`);
+    detectBtn.disabled = false;
+
+  } catch (e) {
+    console.error(e);
+    setStatus('error', 'エラーが発生しました: ' + e.message);
+    detectBtn.disabled = false;
+  }
+});
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ============================================================
+// REGION LIST UI
+// ============================================================
+function renderRegionList() {
+  regionList.innerHTML = '';
+  detectedRegions.forEach((region, i) => {
+    const item = document.createElement('div');
+    item.className = 'region-item' + (region.enabled ? ' active' : '');
+    item.innerHTML = `
+      <div class="region-color" style="background:${region.color}"></div>
+      <div class="region-label">${region.label}<div style="font-size:10px;color:var(--muted);margin-top:2px">${region.description||''}</div></div>
+      <div class="region-toggle ${region.enabled ? 'on' : ''}" data-idx="${i}"></div>
+    `;
+    item.querySelector('.region-toggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      detectedRegions[i].enabled = !detectedRegions[i].enabled;
+      renderRegionList();
+      drawOverlay();
+    });
+    regionList.appendChild(item);
+  });
+}
+
+// ============================================================
+// OVERLAY DRAWING (static polygon outlines)
+// ============================================================
+function drawOverlay(t = 0) {
+  oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+
+  detectedRegions.forEach(region => {
+    if (!region.polygon || region.polygon.length < 3) return;
+    const color = region.color;
+
+    oCtx.beginPath();
+    region.polygon.forEach(([px, py], idx) => {
+      const x = px * W, y = py * H;
+      idx === 0 ? oCtx.moveTo(x, y) : oCtx.lineTo(x, y);
+    });
+    oCtx.closePath();
+
+    if (region.enabled) {
+      oCtx.fillStyle = color + '22';
+      oCtx.fill();
+      oCtx.strokeStyle = color;
+      oCtx.lineWidth = 1.5;
+      oCtx.setLineDash([]);
+      oCtx.stroke();
+    } else {
+      oCtx.strokeStyle = color + '55';
+      oCtx.lineWidth = 1;
+      oCtx.setLineDash([4, 4]);
+      oCtx.stroke();
+      oCtx.setLineDash([]);
+    }
+  });
+}
+
+// ============================================================
+// ANIMATION — warp the canvas pixels inside each polygon
+// ============================================================
+function startAnim() {
+  stopAnim();
+  startTime = performance.now();
+  rafId = requestAnimationFrame(animLoop);
+}
+function stopAnim() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+}
+
+function animLoop(now) {
+  const elapsed = (now - startTime) / 1000;
+  renderAnimFrame(elapsed);
+  rafId = requestAnimationFrame(animLoop);
+}
+
+function renderAnimFrame(t) {
+  const W = mainCanvas.width, H = mainCanvas.height;
+  const spd  = parseFloat(document.getElementById('spd').value);
+  const amp  = parseFloat(document.getElementById('amp').value);
+  const smooth = parseFloat(document.getElementById('smooth').value);
+
+  // Start from original image
+  mCtx.clearRect(0, 0, W, H);
+  mCtx.drawImage(imageEl, 0, 0, W, H);
+
+  // For each enabled region: warp pixels using displacement map
+  detectedRegions.forEach(region => {
+    if (!region.enabled || !region.polygon || region.polygon.length < 3) return;
+
+    const phase = (t / spd) * Math.PI * 2 + region.animOffset;
+
+    // Get bounding box of polygon
+    const xs = region.polygon.map(([x]) => x * W);
+    const ys = region.polygon.map(([, y]) => y * H);
+    const minX = Math.max(0, Math.floor(Math.min(...xs)) - 2);
+    const maxX = Math.min(W, Math.ceil(Math.max(...xs)) + 2);
+    const minY = Math.max(0, Math.floor(Math.min(...ys)) - 2);
+    const maxY = Math.min(H, Math.ceil(Math.max(...ys)) + 2);
+
+    const anchorX = (region.anchor?.[0] ?? 0.5) * W;
+    const anchorY = (region.anchor?.[1] ?? 0) * H;
+
+    // Extract region pixels from original
+    const regionW = maxX - minX, regionH = maxY - minY;
+    if (regionW <= 0 || regionH <= 0) return;
+
+    // Draw warped region into temp canvas
+    const tmp = document.createElement('canvas');
+    tmp.width = regionW; tmp.height = regionH;
+    const tCtx = tmp.getContext('2d');
+    tCtx.drawImage(mainCanvas, minX, minY, regionW, regionH, 0, 0, regionW, regionH);
+    const imgData = tCtx.getImageData(0, 0, regionW, regionH);
+    const src = new Uint8ClampedArray(imgData.data);
+
+    const out = tCtx.createImageData(regionW, regionH);
+    const dst = out.data;
+
+    for (let py = 0; py < regionH; py++) {
+      for (let px = 0; px < regionW; px++) {
+        const worldX = minX + px;
+        const worldY = minY + py;
+
+        if (!pointInPolygon(worldX / W, worldY / H, region.polygon)) {
+          // Outside polygon: copy as-is
+          const idx = (py * regionW + px) * 4;
+          dst[idx]   = src[idx];
+          dst[idx+1] = src[idx+1];
+          dst[idx+2] = src[idx+2];
+          dst[idx+3] = src[idx+3];
+          continue;
+        }
+
+        // Distance from anchor (normalized 0→1 from anchor to tip)
+        const dy = worldY - anchorY;
+        const dx = worldX - anchorX;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const maxDist = Math.sqrt(W*W + H*H) * 0.5;
+        const influence = Math.pow(Math.min(dist / maxDist, 1), 1 - smooth * 0.8);
+
+        // Displacement
+        let dispX = 0, dispY = 0;
+        if (animType === 'sway') {
+          dispX = Math.sin(phase) * amp * influence;
+        } else if (animType === 'flutter') {
+          dispX = Math.sin(phase + worldY * 0.05) * amp * influence;
+          dispY = Math.cos(phase * 1.3) * amp * 0.3 * influence;
+        } else if (animType === 'bounce') {
+          dispY = Math.abs(Math.sin(phase)) * -amp * influence;
+        } else if (animType === 'wave') {
+          dispX = Math.sin(phase + worldY * 0.08) * amp * influence;
+          dispY = Math.sin(phase * 0.7 + worldX * 0.06) * amp * 0.4 * influence;
+        }
+
+        // Sample source at displaced position
+        const srcX = px - dispX;
+        const srcY = py - dispY;
+        const si = (Math.round(srcY) * regionW + Math.round(srcX)) * 4;
+        const di = (py * regionW + px) * 4;
+
+        if (srcX >= 0 && srcX < regionW && srcY >= 0 && srcY < regionH) {
+          dst[di]   = src[si];
+          dst[di+1] = src[si+1];
+          dst[di+2] = src[si+2];
+          dst[di+3] = src[si+3];
+        }
+      }
+    }
+
+    tCtx.putImageData(out, 0, 0);
+
+    // Clip to polygon and draw back onto main canvas
+    mCtx.save();
+    mCtx.beginPath();
+    region.polygon.forEach(([px, py], idx) => {
+      const x = px * W, y = py * H;
+      idx === 0 ? mCtx.moveTo(x, y) : mCtx.lineTo(x, y);
+    });
+    mCtx.closePath();
+    mCtx.clip();
+    mCtx.drawImage(tmp, minX, minY);
+    mCtx.restore();
+  });
+
+  // Redraw overlay on top
+  drawOverlay(t);
+}
+
+// ============================================================
+// POINT IN POLYGON (ray casting)
+// ============================================================
+function pointInPolygon(px, py, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// ============================================================
+// CONTROLS
+// ============================================================
+document.getElementById('anim-type-grid').querySelectorAll('.anim-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('anim-type-grid').querySelectorAll('.anim-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    animType = btn.dataset.anim;
+  });
+});
+
+document.getElementById('spd').addEventListener('input', function() {
+  document.getElementById('spd-val').textContent = parseFloat(this.value).toFixed(1) + 's';
+});
+document.getElementById('amp').addEventListener('input', function() {
+  document.getElementById('amp-val').textContent = this.value;
+});
+document.getElementById('smooth').addEventListener('input', function() {
+  document.getElementById('smooth-val').textContent = parseFloat(this.value).toFixed(2);
+});
+</script>
+</body>
+</html>
