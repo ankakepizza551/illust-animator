@@ -374,8 +374,20 @@ input[type=range]::-webkit-slider-thumb {
     <!-- AI detect -->
     <div class="panel">
       <div class="panel-title">AI 部位検出</div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Anthropic APIキー</div>
+        <input type="password" id="api-key-input" placeholder="sk-ant-..." style="
+          width:100%;padding:9px 12px;
+          background:var(--surface2);border:1px solid var(--border);
+          border-radius:8px;color:var(--text);font-size:12px;
+          font-family:'Noto Sans JP',sans-serif;outline:none;
+          transition:border-color 0.15s;
+        " onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.5">
+          <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent)">console.anthropic.com</a> で取得。入力内容はこのブラウザにのみ保持され、外部には送信されません。
+        </div>
+      </div>
       <button class="btn-primary" id="detect-btn" disabled>✨ 部位を自動検出</button>
-      <p class="hint">AIがイラストを解析して、動かせる部位（髪・スカート・リボンなど）を自動的に特定します。</p>
     </div>
 
     <!-- detected regions -->
@@ -546,9 +558,21 @@ detectBtn.addEventListener('click', async () => {
 - 動かせそうな部位がない場合は regions: [] を返す
 - 必ずJSONのみ返すこと、前後に文字を入れないこと`;
 
+    const apiKey = document.getElementById('api-key-input').value.trim();
+    if (!apiKey) {
+      setStatus('error', 'APIキーを入力してください');
+      detectBtn.disabled = false;
+      return;
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
