@@ -1,12 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "illust-animator",
-  "main": "src/index.js",
   "compatibility_date": "2026-05-11",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "main": "worker.js",
+  "observability": {
+    "enabled": true
+  },
   "assets": {
     "directory": "."
-  }
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
 }
