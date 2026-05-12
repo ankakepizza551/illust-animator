@@ -426,6 +426,14 @@ input[type=range]::-webkit-slider-thumb {
 </main>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:red;color:white;padding:16px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">
+      エラー行${line}: ${msg}
+    </div>`
+  );
+};
+
 // ============================================================
 // STATE
 // ============================================================
@@ -471,10 +479,20 @@ canvasBox.addEventListener('drop', e => {
 });
 
 function loadImage(file) {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:blue;color:white;padding:10px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9998">
+      loadImage呼ばれた: ${file.name}
+    </div>`
+  );
   imageFile = file;
   const url = URL.createObjectURL(file);
   imageEl = new Image();
   imageEl.onload = () => {
+    document.body.insertAdjacentHTML('afterbegin',
+      `<div style="background:green;color:white;padding:10px;font-size:13px;position:fixed;top:40px;left:0;right:0;z-index:9998">
+        onload発火: ${imageEl.naturalWidth}x${imageEl.naturalHeight}
+      </div>`
+    );
     imageLoaded = true;
     const maxW = canvasBox.offsetWidth - 32;
     const maxH = 440;
