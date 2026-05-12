@@ -1,19 +1,12 @@
 // hair-animator.js
 
-// エラーハンドリングは一時的にコメントアウト
-// window.onerror = (msg, src, line) => {
-//  document.body.insertAdjacentHTML('afterbegin',
-//     `<div style="background:red;color:white;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">JS Error 行${line}: ${msg}</div>`
-//   );
-// };
-
 // ============================================================
 // STATE
 // ============================================================
 let imageFile = null;
 let imageEl = null;
 let imageLoaded = false;
-let detectedRegions = []; // [{label, color, polygon, enabled, animOffset}]
+let detectedRegions = []; 
 let animType = 'sway';
 let rafId = null;
 let startTime = null;
@@ -73,7 +66,8 @@ function loadImage(file) {
     mainCanvas.style.display = 'block';
     overlayCanvas.style.display = 'block';
 
-    if (!mCtx) mCtx = mainCanvas.getContext('2d');
+    // 🌟 パフォーマンス向上のため willReadFrequently を追加
+    if (!mCtx) mCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
     if (!oCtx) oCtx = overlayCanvas.getContext('2d');
     overlayCanvas.style.width  = mainCanvas.width + 'px';
     overlayCanvas.style.height = mainCanvas.height + 'px';
@@ -407,9 +401,10 @@ function animLoop(now) {
 
 function renderAnimFrame(t) {
   const W = mainCanvas.width, H = mainCanvas.height;
-  const spd  = parseFloat(document.getElementById('spd').value);
-  const amp  = parseFloat(document.getElementById('amp').value);
-  const smooth = parseFloat(document.getElementById('smooth').value);
+  const spd     = parseFloat(document.getElementById('spd').value);
+  const amp     = parseFloat(document.getElementById('amp').value);
+  const smooth  = parseFloat(document.getElementById('smooth').value);
+  const feather = parseFloat(document.getElementById('feather').value); // 🌟 ぼかし値
 
   mCtx.clearRect(0, 0, W, H);
   mCtx.drawImage(imageEl, 0, 0, W, H);
@@ -425,10 +420,13 @@ function renderAnimFrame(t) {
 
     const xs = region.polygon.map(([x]) => x * W);
     const ys = region.polygon.map(([, y]) => y * H);
-    const minX = Math.max(0, Math.floor(Math.min(...xs)) - 2);
-    const maxX = Math.min(W, Math.ceil(Math.max(...xs)) + 2);
-    const minY = Math.max(0, Math.floor(Math.min(...ys)) - 2);
-    const maxY = Math.min(H, Math.ceil(Math.max(...ys)) + 2);
+    
+    // 🌟 ぼかし分だけBounding Boxを広げる
+    const pad = Math.ceil(feather) + 4;
+    const minX = Math.max(0, Math.floor(Math.min(...xs)) - pad);
+    const maxX = Math.min(W, Math.ceil(Math.max(...xs)) + pad);
+    const minY = Math.max(0, Math.floor(Math.min(...ys)) - pad);
+    const maxY = Math.min(H, Math.ceil(Math.max(...ys)) + pad);
 
     const anchorX = (region.anchor?.[0] ?? 0.5) * W;
     const anchorY = (region.anchor?.[1] ?? 0) * H;
@@ -439,23 +437,46 @@ function renderAnimFrame(t) {
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
 
+    // 🌟 マスクキャンバスの生成（滑らかなぼかし境界を作る）
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = regionW; maskCanvas.height = regionH;
+    const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    
+    maskCtx.translate(-minX, -minY);
+    if (feather > 0) {
+      maskCtx.filter = `blur(${feather}px)`;
+    }
+    maskCtx.beginPath();
+    region.polygon.forEach(([px, py], idx) => {
+      const x = px * W, y = py * H;
+      idx === 0 ? maskCtx.moveTo(x, y) : maskCtx.lineTo(x, y);
+    });
+    maskCtx.closePath();
+    maskCtx.fillStyle = '#fff';
+    maskCtx.fill();
+    // マスクのピクセル情報を取得（アルファチャンネルをフェード値として使う）
+    const maskData = maskCtx.getImageData(0, 0, regionW, regionH).data;
+
+    // 🌟 元画像の切り抜き
     const tmp = document.createElement('canvas');
     tmp.width = regionW; tmp.height = regionH;
-    const tCtx = tmp.getContext('2d');
+    const tCtx = tmp.getContext('2d', { willReadFrequently: true });
     tCtx.drawImage(mainCanvas, minX, minY, regionW, regionH, 0, 0, regionW, regionH);
+    
     const imgData = tCtx.getImageData(0, 0, regionW, regionH);
-    const src = new Uint8ClampedArray(imgData.data);
-
+    const src = imgData.data; // 元のピクセル
     const out = tCtx.createImageData(regionW, regionH);
-    const dst = out.data;
+    const dst = out.data; // 出力用ピクセル
 
+    // 🌟 ピクセルごとの処理（重い pointInPolygon を廃止して爆速化！）
     for (let py = 0; py < regionH; py++) {
       for (let px = 0; px < regionW; px++) {
-        const worldX = minX + px;
-        const worldY = minY + py;
+        // マスクの不透明度 (0.0〜1.0)
+        const maskAlpha = maskData[(py * regionW + px) * 4 + 3] / 255;
+        const idx = (py * regionW + px) * 4;
 
-        if (!pointInPolygon(worldX / W, worldY / H, region.polygon)) {
-          const idx = (py * regionW + px) * 4;
+        // 完全にポリゴンの外側なら計算をスキップして元画像をコピー
+        if (maskAlpha <= 0) {
           dst[idx]   = src[idx];
           dst[idx+1] = src[idx+1];
           dst[idx+2] = src[idx+2];
@@ -463,6 +484,8 @@ function renderAnimFrame(t) {
           continue;
         }
 
+        const worldX = minX + px;
+        const worldY = minY + py;
         const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
         const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp;
 
@@ -486,24 +509,21 @@ function renderAnimFrame(t) {
           offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
         }
 
-        const FADE_PX = 4;
-        const dLeft = worldX - minX, dRight = maxX - worldX;
-        const dTop = worldY - minY, dBottom = maxY - worldY;
-        const minEdgeDist = Math.min(dLeft, dRight, dTop, dBottom);
-        const edgeFade = minEdgeDist < FADE_PX ? minEdgeDist / FADE_PX : 1;
-
         const srcX = Math.round(px - offsetX);
         const srcY = Math.round(py - offsetY);
-        const idx = (py * regionW + px) * 4;
 
         if (srcX >= 0 && srcX < regionW && srcY >= 0 && srcY < regionH) {
           const srcIdx = (srcY * regionW + srcX) * 4;
-          dst[idx]   = src[srcIdx];
-          dst[idx+1] = src[srcIdx+1];
-          dst[idx+2] = src[srcIdx+2];
-          dst[idx+3] = Math.round(src[srcIdx+3] * edgeFade);
+          // 🌟 魔法の合成処理：変形したピクセルと元ピクセルを、マスクの濃度に応じて滑らかに混ぜる
+          dst[idx]   = src[srcIdx]   * maskAlpha + src[idx]   * (1 - maskAlpha);
+          dst[idx+1] = src[srcIdx+1] * maskAlpha + src[idx+1] * (1 - maskAlpha);
+          dst[idx+2] = src[srcIdx+2] * maskAlpha + src[idx+2] * (1 - maskAlpha);
+          dst[idx+3] = src[srcIdx+3] * maskAlpha + src[idx+3] * (1 - maskAlpha);
         } else {
-          dst[idx+3] = 0;
+          dst[idx]   = src[idx];
+          dst[idx+1] = src[idx+1];
+          dst[idx+2] = src[idx+2];
+          dst[idx+3] = src[idx+3];
         }
       }
     }
@@ -512,21 +532,6 @@ function renderAnimFrame(t) {
     mCtx.clearRect(minX, minY, regionW, regionH);
     mCtx.drawImage(tmp, minX, minY);
   });
-}
-
-// ============================================================
-// UTILITY
-// ============================================================
-function pointInPolygon(x, y, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
 
 // ============================================================
@@ -543,12 +548,14 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 // ============================================================
 // SLIDER VALUE DISPLAY
 // ============================================================
-['spd','amp','smooth'].forEach(id => {
+['spd','amp','smooth','feather'].forEach(id => {
   const el = document.getElementById(id);
   const valEl = document.getElementById(id + '-val');
   if (el && valEl) {
     el.addEventListener('input', () => {
-      valEl.textContent = id === 'spd' ? parseFloat(el.value).toFixed(1) + 's' : el.value;
+      if (id === 'spd') valEl.textContent = parseFloat(el.value).toFixed(1) + 's';
+      else if (id === 'feather') valEl.textContent = el.value + 'px';
+      else valEl.textContent = el.value;
     });
   }
 });
@@ -621,8 +628,6 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => {
   if (e.code === 'Space') { isSpaceDown = false; overlayCanvas.style.cursor = panToolActive ? 'grab' : 'crosshair'; }
 });
-
-function pointInPolygonRatio(x, y, polygon) { return pointInPolygon(x, y, polygon); }
 
 function drawEditOverlay() {
   if (!oCtx) return;
@@ -721,6 +726,19 @@ function findEdgeInsertPoint(pt) {
     }
   }
   return best;
+}
+
+// 編集画面での当たり判定（簡易的にそのまま）
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 function findRegionContaining(pt) {
@@ -1062,7 +1080,7 @@ if (loadProjectBtn && projectFileInput) {
       }
     };
     reader.readAsText(file);
-    e.target.value = ''; // 連続で同じファイルを読めるようにリセット
+    e.target.value = '';
   });
 }
 
