@@ -1,5 +1,4 @@
 // hair-animator.js
-document.addEventListener('DOMContentLoaded', () => {
 
 // ============================================================
 // STATE
@@ -1274,6 +1273,3 @@ if (exportBtn) {
     }
   });
 }
-
-
-}); // DOMContentLoaded
