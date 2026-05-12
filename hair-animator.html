@@ -252,13 +252,12 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 #file-input {
-  position: absolute;
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
   width: 1px;
   height: 1px;
   opacity: 0;
-  overflow: hidden;
-  clip: rect(0,0,0,0);
-  white-space: nowrap;
 }.canvas-box.dragover { border-color: var(--accent); }
 
 /* anim type */
@@ -353,15 +352,15 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <input type="file" id="file-input" accept="image/*">
-      <label id="dropzone" for="file-input">
+      <input type="file" id="file-input" accept="image/*" onchange="if(this.files[0]){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:purple;color:white;padding:10px;position:fixed;top:80px;left:0;right:0;z-index:9998\'>onchange属性発火: '+this.files[0].name+'</div>');loadImage(this.files[0]);}">
+      <div id="dropzone" onclick="document.getElementById('file-input').click()">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
           <strong>イラストをドロップ</strong>
           クリックして選択<br>
           <small>PNG / JPG / WebP</small>
         </div>
-      </label>
+      </div>
       <canvas id="main-canvas" style="display:none"></canvas>
       <canvas id="overlay-canvas" style="display:none"></canvas>
     </div>
