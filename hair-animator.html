@@ -446,8 +446,8 @@ const dropzone    = document.getElementById('dropzone');
 const canvasBox   = document.getElementById('canvas-box');
 const mainCanvas  = document.getElementById('main-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
-const mCtx        = mainCanvas.getContext('2d');
-const oCtx        = overlayCanvas.getContext('2d');
+let mCtx = null;
+let oCtx = null;
 const fileInput   = document.getElementById('file-input');
 const detectBtn   = document.getElementById('detect-btn');
 const regionsPanel= document.getElementById('regions-panel');
@@ -487,6 +487,10 @@ function loadImage(file) {
     // center canvas in box
     mainCanvas.style.display = 'block';
     overlayCanvas.style.display = 'block';
+
+    // canvasが表示されてからcontextを取得
+    if (!mCtx) mCtx = mainCanvas.getContext('2d');
+    if (!oCtx) oCtx = overlayCanvas.getContext('2d');
     overlayCanvas.style.width  = mainCanvas.width + 'px';
     overlayCanvas.style.height = mainCanvas.height + 'px';
     overlayCanvas.style.left   = mainCanvas.offsetLeft + 'px';
