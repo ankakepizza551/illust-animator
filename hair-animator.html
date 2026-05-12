@@ -352,7 +352,7 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <input type="file" id="file-input" accept="image/*" onchange="if(this.files[0]){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:purple;color:white;padding:10px;position:fixed;top:80px;left:0;right:0;z-index:9998\'>onchange属性発火: '+this.files[0].name+'</div>');try{loadImage(this.files[0]);}catch(err){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:red;color:white;padding:10px;position:fixed;top:120px;left:0;right:0;z-index:9999\'>loadImageエラー: '+err.message+'</div>');}}">
+      <input type="file" id="file-input" accept="image/*" onchange="if(this.files[0])loadImage(this.files[0])">
       <div id="dropzone" onclick="document.getElementById('file-input').click()">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
@@ -434,10 +434,12 @@ input[type=range]::-webkit-slider-thumb {
 window.onerror = function(msg, src, line, col, err) {
   document.body.insertAdjacentHTML('afterbegin',
     `<div style="background:red;color:white;padding:16px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">
-      エラー行${line}: ${msg}
+      window.onerror 行${line}: ${msg}
     </div>`
   );
 };
+
+try {
 
 // ============================================================
 // STATE
@@ -484,20 +486,10 @@ canvasBox.addEventListener('drop', e => {
 });
 
 function loadImage(file) {
-  document.body.insertAdjacentHTML('afterbegin',
-    `<div style="background:blue;color:white;padding:10px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9998">
-      loadImage呼ばれた: ${file.name}
-    </div>`
-  );
   imageFile = file;
   const url = URL.createObjectURL(file);
   imageEl = new Image();
   imageEl.onload = () => {
-    document.body.insertAdjacentHTML('afterbegin',
-      `<div style="background:green;color:white;padding:10px;font-size:13px;position:fixed;top:40px;left:0;right:0;z-index:9998">
-        onload発火: ${imageEl.naturalWidth}x${imageEl.naturalHeight}
-      </div>`
-    );
     imageLoaded = true;
     const maxW = canvasBox.offsetWidth - 32;
     const maxH = 440;
@@ -793,3 +785,68 @@ function renderAnimFrame(t) {
           dst[idx+3] = src[idx+3];
           continue;
         }
+
+        // Inside polygon: apply warp based on distance from anchor
+        const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
+        const influence = Math.min(distFromAnchor / 100, 1) * amp;
+        const offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
+        const offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
+
+        const srcX = Math.round(px - offsetX);
+        const srcY = Math.round(py - offsetY);
+        const idx = (py * regionW + px) * 4;
+
+        if (srcX >= 0 && srcX < regionW && srcY >= 0 && srcY < regionH) {
+          const srcIdx = (srcY * regionW + srcX) * 4;
+          dst[idx]   = src[srcIdx];
+          dst[idx+1] = src[srcIdx+1];
+          dst[idx+2] = src[srcIdx+2];
+          dst[idx+3] = src[srcIdx+3];
+        } else {
+          dst[idx+3] = 0;
+        }
+      }
+    }
+
+    tCtx.putImageData(out, 0, 0);
+    mCtx.clearRect(minX, minY, regionW, regionH);
+    mCtx.drawImage(tmp, minX, minY);
+  });
+}
+
+// ============================================================
+// UTILITY
+// ============================================================
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// ============================================================
+// ANIM TYPE SELECTOR
+// ============================================================
+document.querySelectorAll('.anim-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.anim-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    animType = chip.dataset.anim;
+  });
+});
+
+} catch (e) {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:orange;color:black;padding:16px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">
+      初期化エラー: ${e.message}
+    </div>`
+  );
+}
+</script>
+</body>
+</html>
