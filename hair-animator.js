@@ -70,11 +70,9 @@ function loadImage(file) {
     overlayCanvas.width  = mainCanvas.width;
     overlayCanvas.height = mainCanvas.height;
 
-    // center canvas in box
     mainCanvas.style.display = 'block';
     overlayCanvas.style.display = 'block';
 
-    // canvasが表示されてからcontextを取得
     if (!mCtx) mCtx = mainCanvas.getContext('2d');
     if (!oCtx) oCtx = overlayCanvas.getContext('2d');
     overlayCanvas.style.width  = mainCanvas.width + 'px';
@@ -235,7 +233,6 @@ function renderRegionList() {
     const item = document.createElement('div');
     item.className = 'region-item' + (region.enabled ? ' active' : '');
 
-    // 🌟 ▲▼ボタンで順番を入れ替える機能を追加
     item.innerHTML = `
       <div class="region-color" style="background:${region.color}"></div>
       <div class="region-label" style="flex:1;">
@@ -249,7 +246,6 @@ function renderRegionList() {
       <div class="region-toggle ${region.enabled ? 'on' : ''}" data-idx="${i}"></div>
     `;
 
-    // ボタンクリック時の入れ替え処理
     const upBtn = item.querySelector('.layer-up');
     const downBtn = item.querySelector('.layer-down');
     
@@ -567,7 +563,6 @@ let draggingAnchor = false;
 let lastTapTime = 0;
 let lastTapVertexIdx = -1;
 
-// 移動(Pan)用の状態
 let isSpaceDown = false;
 let isPanning = false;
 let panToolActive = false;
@@ -620,7 +615,6 @@ if (panBtn) {
   });
 }
 
-// Spaceキーでのパン操作（PC向け）
 window.addEventListener('keydown', e => {
   if (e.code === 'Space' && editMode) { isSpaceDown = true; overlayCanvas.style.cursor = 'grab'; e.preventDefault(); }
 });
@@ -742,7 +736,6 @@ function onEditStart(e) {
   if (!editMode) return;
   if (e.touches && e.touches.length >= 2) return; 
 
-  // ===== 移動（パン）判定 =====
   if (isSpaceDown || e.button === 1 || panToolActive) {
     e.preventDefault();
     isPanning = true;
@@ -817,7 +810,6 @@ function onEditStart(e) {
 function onEditMove(e) {
   if (!editMode) return;
 
-  // ===== 移動処理 =====
   if (isPanning) {
     e.preventDefault();
     const touch = e.touches ? e.touches[0] : e;
@@ -988,6 +980,89 @@ const redetectBtn = document.getElementById('redetect-btn');
 if (redetectBtn) {
   redetectBtn.addEventListener('click', () => {
     stopAnim(); detectedRegions = []; undoStack = []; document.getElementById('detect-btn').click();
+  });
+}
+
+// ============================================================
+// PROJECT SAVE & LOAD (プロジェクトデータの保存と読み込み)
+// ============================================================
+const saveProjectBtn = document.getElementById('save-project-btn');
+const loadProjectBtn = document.getElementById('load-project-btn');
+const projectFileInput = document.getElementById('project-file-input');
+
+if (saveProjectBtn) {
+  saveProjectBtn.addEventListener('click', () => {
+    if (detectedRegions.length === 0) {
+      alert('保存する部位データがありません。');
+      return;
+    }
+    const projectData = {
+      version: 1,
+      regions: detectedRegions,
+      settings: {
+        animType,
+        spd: document.getElementById('spd').value,
+        amp: document.getElementById('amp').value,
+        smooth: document.getElementById('smooth').value
+      }
+    };
+    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'hair_animator_project.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+if (loadProjectBtn && projectFileInput) {
+  loadProjectBtn.addEventListener('click', () => projectFileInput.click());
+  projectFileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.regions && Array.isArray(data.regions)) {
+          detectedRegions = data.regions;
+          
+          if (data.settings) {
+            animType = data.settings.animType || 'sway';
+            document.querySelectorAll('.anim-chip').forEach(c => {
+              c.classList.toggle('active', c.dataset.anim === animType);
+            });
+            if (data.settings.spd) {
+              document.getElementById('spd').value = data.settings.spd;
+              document.getElementById('spd-val').textContent = parseFloat(data.settings.spd).toFixed(1) + 's';
+            }
+            if (data.settings.amp) {
+              document.getElementById('amp').value = data.settings.amp;
+              document.getElementById('amp-val').textContent = data.settings.amp;
+            }
+            if (data.settings.smooth) {
+              document.getElementById('smooth').value = data.settings.smooth;
+              document.getElementById('smooth-val').textContent = data.settings.smooth;
+            }
+          }
+
+          undoStack = [];
+          saveUndoState();
+          renderRegionList();
+          drawOverlay();
+          startAnim();
+          alert('プロジェクトデータを読み込みました！');
+        } else {
+          throw new Error('無効なデータ形式です');
+        }
+      } catch (err) {
+        alert('読み込みに失敗しました。正しいプロジェクトファイル(.json)を選択してください。');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // 連続で同じファイルを読めるようにリセット
   });
 }
 
