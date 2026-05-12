@@ -105,6 +105,7 @@ main {
   padding: 48px;
   cursor: pointer;
   text-align: center;
+  position: relative;
 }
 #dropzone.hidden { display: none; }
 .drop-ring {
@@ -375,15 +376,15 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <input type="file" id="file-input" accept="image/*" style="position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0">
-      <label id="dropzone" for="file-input">
+      <div id="dropzone">
+        <input type="file" id="file-input" accept="image/*" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
           <strong>イラストをドロップ</strong>
           クリックして選択<br>
           <small>PNG / JPG / WebP</small>
         </div>
-      </label>
+      </div>
       <div id="canvas-zoom-wrap">
         <canvas id="main-canvas" style="display:none"></canvas>
         <canvas id="overlay-canvas" style="display:none"></canvas>

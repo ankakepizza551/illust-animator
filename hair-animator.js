@@ -40,7 +40,6 @@ const changeBtn   = document.getElementById('change-btn');
 // ============================================================
 // FILE LOAD
 // ============================================================
-// dropzoneはlabelなので自動でfile-inputを開く
 changeBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => {
   const file = e.target.files[0];
