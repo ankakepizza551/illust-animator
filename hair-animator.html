@@ -253,8 +253,7 @@ input[type=range]::-webkit-slider-thumb {
 
 #file-input {
   display: none;
-}
-.canvas-box.dragover { border-color: var(--accent); }
+}.canvas-box.dragover { border-color: var(--accent); }
 
 /* anim type */
 .anim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -348,14 +347,15 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <lavel id="dropzone">
+      <input type="file" id="file-input" accept="image/*">
+      <label id="dropzone" for="file-input">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
           <strong>イラストをドロップ</strong>
           クリックして選択<br>
           <small>PNG / JPG / WebP</small>
         </div>
-      </lavel>
+      </label>
       <canvas id="main-canvas" style="display:none"></canvas>
       <canvas id="overlay-canvas" style="display:none"></canvas>
     </div>
@@ -425,11 +425,6 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </main>
 
-<!-- 変更後：canvas-boxの中の先頭に移動 -->
-<div class="canvas-box" id="canvas-box">
-  <input type="file" id="file-input" accept="image/*">
-<div id="dropzone">
-
 <script>
 // ============================================================
 // STATE
@@ -451,6 +446,8 @@ const dropzone    = document.getElementById('dropzone');
 const canvasBox   = document.getElementById('canvas-box');
 const mainCanvas  = document.getElementById('main-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
+const mCtx        = mainCanvas.getContext('2d');
+const oCtx        = overlayCanvas.getContext('2d');
 const fileInput   = document.getElementById('file-input');
 const detectBtn   = document.getElementById('detect-btn');
 const regionsPanel= document.getElementById('regions-panel');
@@ -459,7 +456,6 @@ const regionList  = document.getElementById('region-list');
 const statusDot   = document.getElementById('status-dot');
 const statusText  = document.getElementById('status-text');
 const changeBtn   = document.getElementById('change-btn');
-let mCtx, oCtx;
 
 // ============================================================
 // FILE LOAD
@@ -474,11 +470,7 @@ canvasBox.addEventListener('drop', e => {
   if (f && f.type.startsWith('image/')) loadImage(f);
 });
 
-// loadImage関数の中で初期化
 function loadImage(file) {
-  // ↓ここで初めて取得
-  if (!mCtx) mCtx = mainCanvas.getContext('2d');
-  if (!oCtx) oCtx = overlayCanvas.getContext('2d');
   imageFile = file;
   const url = URL.createObjectURL(file);
   imageEl = new Image();
