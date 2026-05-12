@@ -43,8 +43,14 @@ const changeBtn   = document.getElementById('change-btn');
 // dropzoneはlabelなので自動でfile-inputを開く
 changeBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => {
-  if (e.target.files[0]) loadImage(e.target.files[0]);
-  e.target.value = ''; // 同じファイルを再選択できるようにリセット
+  const file = e.target.files[0];
+  if (!file) return;
+  // デバッグ: changeイベント発火確認
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div id="dbg" style="background:blue;color:white;padding:10px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999">change発火: ${file.name}</div>`
+  );
+  loadImage(file);
+  e.target.value = '';
 });
 canvasBox.addEventListener('dragover', e => { e.preventDefault(); canvasBox.classList.add('dragover'); });
 canvasBox.addEventListener('dragleave', () => canvasBox.classList.remove('dragover'));
@@ -55,6 +61,9 @@ canvasBox.addEventListener('drop', e => {
 });
 
 function loadImage(file) {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:green;color:white;padding:10px;font-size:13px;position:fixed;top:40px;left:0;right:0;z-index:9999">loadImage呼ばれた: ${file.name}</div>`
+  );
   imageFile = file;
   const url = URL.createObjectURL(file);
   imageEl = new Image();
