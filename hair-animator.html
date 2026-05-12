@@ -459,6 +459,7 @@ const regionList  = document.getElementById('region-list');
 const statusDot   = document.getElementById('status-dot');
 const statusText  = document.getElementById('status-text');
 const changeBtn   = document.getElementById('change-btn');
+let mCtx, oCtx;
 
 // ============================================================
 // FILE LOAD
@@ -473,9 +474,6 @@ canvasBox.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f && f.type.startsWith('image/')) loadImage(f);
 });
-
-// 変更前（トップレベルで即実行）
-mCtx, oCtx;
 
 // loadImage関数の中で初期化
 function loadImage(file) {
