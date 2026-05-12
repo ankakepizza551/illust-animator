@@ -382,15 +382,15 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <input type="file" id="file-input" accept="image/*">
-      <div id="dropzone">
+      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <label id="dropzone" for="file-input">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
           <strong>イラストをドロップ</strong>
           クリックして選択<br>
           <small>PNG / JPG / WebP</small>
         </div>
-      </div>
+      </label>
       <div id="canvas-zoom-wrap">
         <canvas id="main-canvas" style="display:none"></canvas>
         <canvas id="overlay-canvas" style="display:none"></canvas>

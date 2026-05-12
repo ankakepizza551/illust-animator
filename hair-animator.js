@@ -40,9 +40,12 @@ const changeBtn   = document.getElementById('change-btn');
 // ============================================================
 // FILE LOAD
 // ============================================================
-dropzone.addEventListener('click', () => fileInput.click());
+// dropzoneはlabelなので自動でfile-inputを開く
 changeBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', e => e.target.files[0] && loadImage(e.target.files[0]));
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadImage(e.target.files[0]);
+  e.target.value = ''; // 同じファイルを再選択できるようにリセット
+});
 canvasBox.addEventListener('dragover', e => { e.preventDefault(); canvasBox.classList.add('dragover'); });
 canvasBox.addEventListener('dragleave', () => canvasBox.classList.remove('dragover'));
 canvasBox.addEventListener('drop', e => {
