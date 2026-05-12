@@ -1404,8 +1404,12 @@ if (loadProjectBtn && projectFileInput) {
   });
 }
 
-// ============================================================
-// EXPORT
+// ドロップゾーンからの読み込みボタン
+const loadFromTopBtn = document.getElementById('load-project-from-top-btn');
+if (loadFromTopBtn && projectFileInput) {
+  loadFromTopBtn.addEventListener('click', () => projectFileInput.click());
+}
+
 // ============================================================
 let exportFmt = 'gif';
 let exportFrames = 20;

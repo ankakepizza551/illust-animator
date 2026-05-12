@@ -361,6 +361,17 @@ input[type=range]::-webkit-slider-thumb {
           クリックして選択<br>
           <small>PNG / JPG / WebP</small>
         </div>
+        <div style="position:relative;z-index:20;margin-top:12px" onclick="event.stopPropagation()">
+          <button id="load-project-from-top-btn" style="
+            background:var(--surface2);border:1px solid var(--border);
+            border-radius:8px;color:var(--muted);font-size:12px;
+            font-family:'Noto Sans JP',sans-serif;padding:8px 16px;
+            cursor:pointer;transition:all 0.15s;
+          " onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent)'"
+             onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+            📂 以前のプロジェクトを読み込む
+          </button>
+        </div>
       </div>
       <div id="canvas-zoom-wrap">
         <canvas id="main-canvas" style="display:none"></canvas>
