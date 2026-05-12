@@ -352,7 +352,7 @@ input[type=range]::-webkit-slider-thumb {
 <main>
   <div class="canvas-wrap">
     <div class="canvas-box" id="canvas-box">
-      <input type="file" id="file-input" accept="image/*" onchange="if(this.files[0]){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:purple;color:white;padding:10px;position:fixed;top:80px;left:0;right:0;z-index:9998\'>onchange属性発火: '+this.files[0].name+'</div>');loadImage(this.files[0]);}">
+      <input type="file" id="file-input" accept="image/*" onchange="if(this.files[0]){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:purple;color:white;padding:10px;position:fixed;top:80px;left:0;right:0;z-index:9998\'>onchange属性発火: '+this.files[0].name+'</div>');try{loadImage(this.files[0]);}catch(err){document.body.insertAdjacentHTML('afterbegin','<div style=\'background:red;color:white;padding:10px;position:fixed;top:120px;left:0;right:0;z-index:9999\'>loadImageエラー: '+err.message+'</div>');}}">
       <div id="dropzone" onclick="document.getElementById('file-input').click()">
         <div class="drop-ring">🧑‍🎨</div>
         <div class="drop-text">
