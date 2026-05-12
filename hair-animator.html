@@ -854,14 +854,13 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 });
 
 // ============================================================
-// 矩形編集モード（部位ごとのバウンディングボックスを移動・リサイズ）
+// 頂点編集モード（ポリゴンの頂点を直接動かす）
 // ============================================================
 let editMode = false;
 let editingRegionIdx = -1;
-let editAction = null; // 'move' | 'nw' | 'ne' | 'sw' | 'se' | null
-let editStartPt = null;
-let editStartBox = null;
-let editOriginalPolygon = null;
+let draggingVertexIdx = -1;
+let lastTapTime = 0;
+let lastTapVertexIdx = -1;
 
 const editBtn     = document.getElementById('edit-btn');
 const editBar     = document.getElementById('edit-bar');
@@ -875,9 +874,8 @@ if (editBtn && editBar && editDoneBtn) {
     if (editingRegionIdx < 0) editingRegionIdx = 0;
     overlayCanvas.classList.add('edit-mode');
     editBar.classList.add('visible');
-    // ヒント文を更新
     const tip = editBar.querySelector('.edit-tip');
-    if (tip) tip.innerHTML = '<b>編集モード：</b>枠をドラッグで移動 / 四隅をドラッグでサイズ変更 / 部位タップで切替';
+    if (tip) tip.innerHTML = '<b>編集モード：</b>頂点をドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除 / 部位中央タップで切替';
     stopAnim();
     drawEditOverlay();
   });
@@ -885,6 +883,7 @@ if (editBtn && editBar && editDoneBtn) {
   editDoneBtn.addEventListener('click', () => {
     editMode = false;
     editingRegionIdx = -1;
+    draggingVertexIdx = -1;
     overlayCanvas.classList.remove('edit-mode');
     editBar.classList.remove('visible');
     drawOverlay();
@@ -892,16 +891,9 @@ if (editBtn && editBar && editDoneBtn) {
   });
 }
 
-// 部位のバウンディングボックスを取得（画像座標系、0〜1の比率）
-function getRegionBox(region) {
-  const xs = region.polygon.map(p => p[0]);
-  const ys = region.polygon.map(p => p[1]);
-  return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
-  };
+// 点が多角形の中にあるか（編集対象切り替え用）
+function pointInPolygonRatio(x, y, polygon) {
+  return pointInPolygon(x, y, polygon);
 }
 
 // 編集モードのオーバーレイ描画
@@ -915,7 +907,7 @@ function drawEditOverlay() {
     const isEditing = i === editingRegionIdx;
     const color = region.color;
 
-    // ポリゴンを薄く表示
+    // ポリゴン本体
     oCtx.beginPath();
     region.polygon.forEach(([px, py], idx) => {
       const x = px * W, y = py * H;
@@ -924,85 +916,133 @@ function drawEditOverlay() {
     oCtx.closePath();
     oCtx.fillStyle = color + (isEditing ? '33' : '11');
     oCtx.fill();
-    oCtx.strokeStyle = color + (isEditing ? 'ff' : '55');
-    oCtx.lineWidth = 1;
-    oCtx.stroke();
-
-    // バウンディングボックスを描く
-    const box = getRegionBox(region);
-    const bx = box.minX * W, by = box.minY * H;
-    const bw = (box.maxX - box.minX) * W, bh = (box.maxY - box.minY) * H;
-
-    oCtx.strokeStyle = color;
-    oCtx.lineWidth = isEditing ? 2.5 : 1.2;
+    oCtx.strokeStyle = color + (isEditing ? 'ff' : '66');
+    oCtx.lineWidth = isEditing ? 2 : 1;
     oCtx.setLineDash(isEditing ? [] : [4, 4]);
-    oCtx.strokeRect(bx, by, bw, bh);
+    oCtx.stroke();
     oCtx.setLineDash([]);
 
-    // ラベルを表示
+    // ラベル
+    const xs = region.polygon.map(p => p[0]);
+    const ys = region.polygon.map(p => p[1]);
+    const minX = Math.min(...xs), minY = Math.min(...ys);
     oCtx.fillStyle = color;
-    oCtx.font = 'bold 12px sans-serif';
-    oCtx.fillText(region.label || '部位' + (i+1), bx + 4, by - 4);
+    oCtx.font = isEditing ? 'bold 13px sans-serif' : '11px sans-serif';
+    oCtx.fillText(region.label || '部位' + (i+1), minX * W + 4, minY * H - 4);
 
-    // 編集中の部位はハンドルを描く
+    // 編集中の部位は頂点ハンドルを描く
     if (isEditing) {
-      const handleSize = 12;
-      const handles = [
-        { x: bx, y: by },                 // nw
-        { x: bx + bw, y: by },            // ne
-        { x: bx, y: by + bh },            // sw
-        { x: bx + bw, y: by + bh },       // se
-      ];
-      handles.forEach(h => {
+      region.polygon.forEach(([px, py], idx) => {
+        const x = px * W, y = py * H;
+        // 外側の白い円
+        oCtx.beginPath();
+        oCtx.arc(x, y, 9, 0, Math.PI * 2);
+        oCtx.fillStyle = '#fff';
+        oCtx.fill();
+        // 内側の色付き円
+        oCtx.beginPath();
+        oCtx.arc(x, y, 6, 0, Math.PI * 2);
+        oCtx.fillStyle = color;
+        oCtx.fill();
+        // 縁取り
+        oCtx.beginPath();
+        oCtx.arc(x, y, 9, 0, Math.PI * 2);
+        oCtx.strokeStyle = color;
+        oCtx.lineWidth = 1.5;
+        oCtx.stroke();
+      });
+
+      // anchor を描く（あれば）
+      if (region.anchor) {
+        const ax = region.anchor[0] * W, ay = region.anchor[1] * H;
+        oCtx.beginPath();
+        oCtx.arc(ax, ay, 5, 0, Math.PI * 2);
         oCtx.fillStyle = '#fff';
         oCtx.strokeStyle = color;
         oCtx.lineWidth = 2;
-        oCtx.fillRect(h.x - handleSize/2, h.y - handleSize/2, handleSize, handleSize);
-        oCtx.strokeRect(h.x - handleSize/2, h.y - handleSize/2, handleSize, handleSize);
-      });
+        oCtx.fill();
+        oCtx.stroke();
+        // 十字マーク
+        oCtx.strokeStyle = color;
+        oCtx.lineWidth = 1.5;
+        oCtx.beginPath();
+        oCtx.moveTo(ax - 8, ay); oCtx.lineTo(ax + 8, ay);
+        oCtx.moveTo(ax, ay - 8); oCtx.lineTo(ax, ay + 8);
+        oCtx.stroke();
+      }
     }
   });
 }
 
-// イベント座標を canvas座標に変換
 function getEventPos(e) {
   const rect = overlayCanvas.getBoundingClientRect();
-  const touch = e.touches ? e.touches[0] : e;
+  const touch = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
   return {
     x: touch.clientX - rect.left,
     y: touch.clientY - rect.top,
   };
 }
 
-// ハンドルやボックスとの当たり判定
-function hitTest(pt) {
-  if (editingRegionIdx < 0) return null;
+// pt座標(px) から最も近い頂点を探す
+function findNearestVertex(pt) {
+  if (editingRegionIdx < 0) return -1;
   const region = detectedRegions[editingRegionIdx];
-  if (!region) return null;
+  if (!region || !region.polygon) return -1;
   const W = overlayCanvas.width, H = overlayCanvas.height;
-  const box = getRegionBox(region);
-  const bx = box.minX * W, by = box.minY * H;
-  const bw = (box.maxX - box.minX) * W, bh = (box.maxY - box.minY) * H;
-  const hs = 16; // ハンドル当たり判定（スマホ用に大きめ）
-
-  if (Math.abs(pt.x - bx) < hs && Math.abs(pt.y - by) < hs) return 'nw';
-  if (Math.abs(pt.x - (bx+bw)) < hs && Math.abs(pt.y - by) < hs) return 'ne';
-  if (Math.abs(pt.x - bx) < hs && Math.abs(pt.y - (by+bh)) < hs) return 'sw';
-  if (Math.abs(pt.x - (bx+bw)) < hs && Math.abs(pt.y - (by+bh)) < hs) return 'se';
-  if (pt.x >= bx && pt.x <= bx + bw && pt.y >= by && pt.y <= by + bh) return 'move';
-  return null;
+  const threshold = 22; // タッチ判定の半径(px)
+  let bestIdx = -1, bestDist = Infinity;
+  region.polygon.forEach(([px, py], idx) => {
+    const x = px * W, y = py * H;
+    const d = Math.hypot(pt.x - x, pt.y - y);
+    if (d < threshold && d < bestDist) {
+      bestDist = d;
+      bestIdx = idx;
+    }
+  });
+  return bestIdx;
 }
 
-// 他の部位のボックスがタップされたか
-function findRegionAt(pt) {
+// 辺との距離から、辺の中点に頂点追加できるか判定（追加位置を返す or null）
+function findEdgeInsertPoint(pt) {
+  if (editingRegionIdx < 0) return null;
+  const region = detectedRegions[editingRegionIdx];
+  if (!region || !region.polygon || region.polygon.length < 2) return null;
   const W = overlayCanvas.width, H = overlayCanvas.height;
+  const threshold = 14;
+  let best = null;
+
+  for (let i = 0; i < region.polygon.length; i++) {
+    const j = (i + 1) % region.polygon.length;
+    const ax = region.polygon[i][0] * W, ay = region.polygon[i][1] * H;
+    const bx = region.polygon[j][0] * W, by = region.polygon[j][1] * H;
+    // pt から線分ABへの最短距離
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1) continue;
+    let t = ((pt.x - ax) * dx + (pt.y - ay) * dy) / lenSq;
+    t = Math.max(0.05, Math.min(0.95, t)); // 端ぎりぎりは除外
+    const projX = ax + t * dx;
+    const projY = ay + t * dy;
+    const dist = Math.hypot(pt.x - projX, pt.y - projY);
+    if (dist < threshold && (!best || dist < best.dist)) {
+      best = {
+        dist,
+        insertAfter: i,
+        point: [projX / W, projY / H],
+      };
+    }
+  }
+  return best;
+}
+
+// 他の部位の内部をタップしたか
+function findRegionContaining(pt) {
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+  const ratioX = pt.x / W, ratioY = pt.y / H;
   for (let i = 0; i < detectedRegions.length; i++) {
     const region = detectedRegions[i];
     if (!region.polygon || region.polygon.length < 3) continue;
-    const box = getRegionBox(region);
-    const bx = box.minX * W, by = box.minY * H;
-    const bw = (box.maxX - box.minX) * W, bh = (box.maxY - box.minY) * H;
-    if (pt.x >= bx && pt.x <= bx + bw && pt.y >= by && pt.y <= by + bh) {
+    if (pointInPolygon(ratioX, ratioY, region.polygon)) {
       return i;
     }
   }
@@ -1013,90 +1053,68 @@ function onEditStart(e) {
   if (!editMode || editingRegionIdx < 0) return;
   e.preventDefault();
   const pt = getEventPos(e);
-  const hit = hitTest(pt);
-  if (hit) {
-    editAction = hit;
-    editStartPt = pt;
-    const region = detectedRegions[editingRegionIdx];
-    editStartBox = getRegionBox(region);
-    editOriginalPolygon = region.polygon.map(p => [p[0], p[1]]);
-    overlayCanvas.classList.add('dragging');
-  } else {
-    // 他の部位をタップしたら編集対象を切り替え
-    const idx = findRegionAt(pt);
-    if (idx >= 0 && idx !== editingRegionIdx) {
-      editingRegionIdx = idx;
-      drawEditOverlay();
+
+  // 1. 頂点をつかんだか？
+  const vidx = findNearestVertex(pt);
+  if (vidx >= 0) {
+    // ダブルタップ判定（削除）
+    const now = Date.now();
+    if (now - lastTapTime < 400 && lastTapVertexIdx === vidx) {
+      const region = detectedRegions[editingRegionIdx];
+      if (region.polygon.length > 3) {
+        region.polygon.splice(vidx, 1);
+        drawEditOverlay();
+      }
+      lastTapTime = 0;
+      lastTapVertexIdx = -1;
+      return;
     }
+    lastTapTime = now;
+    lastTapVertexIdx = vidx;
+    draggingVertexIdx = vidx;
+    overlayCanvas.classList.add('dragging');
+    return;
+  }
+
+  // 2. 辺の上をタップしたか？（頂点追加）
+  const edge = findEdgeInsertPoint(pt);
+  if (edge) {
+    const region = detectedRegions[editingRegionIdx];
+    region.polygon.splice(edge.insertAfter + 1, 0, edge.point);
+    draggingVertexIdx = edge.insertAfter + 1;
+    overlayCanvas.classList.add('dragging');
+    drawEditOverlay();
+    return;
+  }
+
+  // 3. 他の部位の内部をタップ → 編集対象切り替え
+  const ridx = findRegionContaining(pt);
+  if (ridx >= 0 && ridx !== editingRegionIdx) {
+    editingRegionIdx = ridx;
+    drawEditOverlay();
   }
 }
 
 function onEditMove(e) {
-  if (!editMode || !editAction || editingRegionIdx < 0) return;
+  if (!editMode || draggingVertexIdx < 0 || editingRegionIdx < 0) return;
   e.preventDefault();
   const pt = getEventPos(e);
   const W = overlayCanvas.width, H = overlayCanvas.height;
-  const dx = (pt.x - editStartPt.x) / W;
-  const dy = (pt.y - editStartPt.y) / H;
   const region = detectedRegions[editingRegionIdx];
-  const orig = editStartBox;
-  const origW = orig.maxX - orig.minX;
-  const origH = orig.maxY - orig.minY;
-
-  let newMinX = orig.minX, newMaxX = orig.maxX;
-  let newMinY = orig.minY, newMaxY = orig.maxY;
-
-  if (editAction === 'move') {
-    newMinX = orig.minX + dx; newMaxX = orig.maxX + dx;
-    newMinY = orig.minY + dy; newMaxY = orig.maxY + dy;
-  } else if (editAction === 'nw') {
-    newMinX = Math.min(orig.maxX - 0.02, orig.minX + dx);
-    newMinY = Math.min(orig.maxY - 0.02, orig.minY + dy);
-  } else if (editAction === 'ne') {
-    newMaxX = Math.max(orig.minX + 0.02, orig.maxX + dx);
-    newMinY = Math.min(orig.maxY - 0.02, orig.minY + dy);
-  } else if (editAction === 'sw') {
-    newMinX = Math.min(orig.maxX - 0.02, orig.minX + dx);
-    newMaxY = Math.max(orig.minY + 0.02, orig.maxY + dy);
-  } else if (editAction === 'se') {
-    newMaxX = Math.max(orig.minX + 0.02, orig.maxX + dx);
-    newMaxY = Math.max(orig.minY + 0.02, orig.maxY + dy);
-  }
-
-  const newW = newMaxX - newMinX;
-  const newH = newMaxY - newMinY;
-  const sx = newW / origW;
-  const sy = newH / origH;
-
-  // ポリゴンを新しいボックスにフィットさせる
-  region.polygon = editOriginalPolygon.map(([px, py]) => {
-    const relX = (px - orig.minX) / origW;
-    const relY = (py - orig.minY) / origH;
-    return [newMinX + relX * newW, newMinY + relY * newH];
-  });
-
-  // anchorも追従
-  if (region.anchor) {
-    const ax = region.anchor[0], ay = region.anchor[1];
-    const relAx = (ax - orig.minX) / origW;
-    const relAy = (ay - orig.minY) / origH;
-    region.anchor = [newMinX + relAx * newW, newMinY + relAy * newH];
-  }
-
+  region.polygon[draggingVertexIdx] = [
+    Math.max(0, Math.min(1, pt.x / W)),
+    Math.max(0, Math.min(1, pt.y / H)),
+  ];
   drawEditOverlay();
 }
 
 function onEditEnd(e) {
-  if (editAction) {
-    editAction = null;
-    editStartPt = null;
-    editStartBox = null;
-    editOriginalPolygon = null;
+  if (draggingVertexIdx >= 0) {
+    draggingVertexIdx = -1;
     overlayCanvas.classList.remove('dragging');
   }
 }
 
-// マウス・タッチ両対応
 overlayCanvas.addEventListener('mousedown', onEditStart);
 overlayCanvas.addEventListener('mousemove', onEditMove);
 overlayCanvas.addEventListener('mouseup', onEditEnd);
