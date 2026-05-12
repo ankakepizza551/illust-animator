@@ -15,6 +15,14 @@ let originalCanvas = null;
 let inpaintBaseCanvas = null; 
 let useInpaint = false;
 
+// 🌟 インタラクティブ（お触り）機能用のステート
+let useInteract = true;
+let targetPointerX = -1000, targetPointerY = -1000;
+let currentPointerX = -1000, currentPointerY = -1000;
+let targetPullStrength = 0;
+let currentPullStrength = 0;
+let interactPointerDown = false;
+
 const REGION_COLORS = ['#a78bfa','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171'];
 
 // ============================================================
@@ -190,7 +198,7 @@ detectBtn.addEventListener('click', async () => {
       animType: null,
       animSpd: null,
       animAmp: null,
-      pins: [] // 🌟 ピン情報を初期化
+      pins: []
     }));
 
     renderRegionList();
@@ -465,8 +473,27 @@ if (inpaintToggleBtn) {
   });
 }
 
+// 🌟 INTERACTIVE TOGGLE
+const interactToggleBtn = document.getElementById('interact-toggle-btn');
+if (interactToggleBtn) {
+  interactToggleBtn.addEventListener('click', () => {
+    useInteract = !useInteract;
+    if (useInteract) {
+      interactToggleBtn.textContent = 'ON';
+      interactToggleBtn.style.background = 'rgba(167,139,250,0.12)';
+      interactToggleBtn.style.color = 'var(--accent)';
+      interactToggleBtn.style.borderColor = 'var(--accent)';
+    } else {
+      interactToggleBtn.textContent = 'OFF';
+      interactToggleBtn.style.background = 'var(--surface2)';
+      interactToggleBtn.style.color = 'var(--muted)';
+      interactToggleBtn.style.borderColor = 'var(--border)';
+    }
+  });
+}
+
 // ============================================================
-// OVERLAY DRAWING (static polygon outlines)
+// OVERLAY DRAWING
 // ============================================================
 function drawOverlay(t = 0) {
   oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -501,7 +528,7 @@ function drawOverlay(t = 0) {
 }
 
 // ============================================================
-// ANIMATION — warp the canvas pixels inside each polygon
+// ANIMATION & INTERACTIVITY
 // ============================================================
 function startAnim() {
   stopAnim();
@@ -525,6 +552,11 @@ function renderAnimFrame(t) {
   const amp     = parseFloat(document.getElementById('amp').value);
   const smooth  = parseFloat(document.getElementById('smooth').value);
   const feather = parseFloat(document.getElementById('feather').value);
+
+  // 🌟 マウスポインタの動きを滑らかにする（バネのような戻り）
+  currentPointerX += (targetPointerX - currentPointerX) * 0.15;
+  currentPointerY += (targetPointerY - currentPointerY) * 0.15;
+  currentPullStrength += (targetPullStrength - currentPullStrength) * 0.1;
 
   mCtx.clearRect(0, 0, W, H);
   
@@ -560,8 +592,6 @@ function renderAnimFrame(t) {
 
     const regionDiag = Math.hypot(maxX - minX, maxY - minY);
     const influenceScale = regionDiag > 0 ? regionDiag * 0.6 : 100;
-    
-    // 🌟 ピンの影響半径（部位の大きさに応じて自動調整）
     const pinRadius = Math.max(50, regionDiag * 0.4); 
 
     const regionW = maxX - minX, regionH = maxY - minY;
@@ -610,7 +640,6 @@ function renderAnimFrame(t) {
         const worldY = minY + py;
         const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
         
-        // 🌟 固定ピンによる影響度の減衰計算
         let pinAttenuation = 1.0;
         if (pins.length > 0) {
           let minDist = Infinity;
@@ -621,10 +650,9 @@ function renderAnimFrame(t) {
             if (d < minDist) minDist = d;
           }
           let t_atten = Math.min(minDist / pinRadius, 1.0);
-          pinAttenuation = t_atten * t_atten * (3 - 2 * t_atten); // 滑らかな減衰
+          pinAttenuation = t_atten * t_atten * (3 - 2 * t_atten);
         }
 
-        // アンカー距離に加えて、ピン付近は influence がゼロに近づく
         const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp * pinAttenuation;
 
         let offsetX = 0, offsetY = 0;
@@ -647,8 +675,24 @@ function renderAnimFrame(t) {
           offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
         }
 
-        const srcX = Math.round(px - offsetX);
-        const srcY = Math.round(py - offsetY);
+        // 🌟 インタラクティブお触り計算
+        let interactX = 0, interactY = 0;
+        if (useInteract && currentPullStrength > 0.01) {
+          const pdx = currentPointerX - worldX;
+          const pdy = currentPointerY - worldY;
+          const pDist = Math.sqrt(pdx*pdx + pdy*pdy);
+          const pRad = 150; // 指で引っ張れる影響範囲(px)
+          if (pDist < pRad && pDist > 0) {
+            const pull = (1 - pDist / pRad) * 20 * currentPullStrength;
+            // 根元やピンは引っ張られないように正規化
+            const normInfl = rAmp > 0 ? Math.min(influence / rAmp, 1) : 0;
+            interactX = (pdx / pDist) * pull * normInfl;
+            interactY = (pdy / pDist) * pull * normInfl;
+          }
+        }
+
+        const srcX = Math.round(px - offsetX - interactX);
+        const srcY = Math.round(py - offsetY - interactY);
 
         if (srcX >= 0 && srcX < regionW && srcY >= 0 && srcY < regionH) {
           const srcIdx = (srcY * regionW + srcX) * 4;
@@ -672,7 +716,7 @@ function renderAnimFrame(t) {
 }
 
 // ============================================================
-// ANIM TYPE SELECTOR
+// ANIM TYPE SELECTOR & SLIDERS
 // ============================================================
 document.querySelectorAll('.anim-chip').forEach(chip => {
   chip.addEventListener('click', () => {
@@ -682,9 +726,6 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
   });
 });
 
-// ============================================================
-// SLIDER VALUE DISPLAY
-// ============================================================
 ['spd','amp','smooth','feather'].forEach(id => {
   const el = document.getElementById(id);
   const valEl = document.getElementById(id + '-val');
@@ -698,7 +739,7 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 });
 
 // ============================================================
-// 頂点編集モード（ポリゴンの頂点を直接動かす）＆ パン・ズーム・ピン対応
+// 頂点編集・パンズーム・ピン・インタラクティブイベント
 // ============================================================
 let editMode = false;
 let editingRegionIdx = -1;
@@ -723,7 +764,6 @@ const panBtn         = document.getElementById('pan-btn');
 const pinBtn         = document.getElementById('pin-btn');
 const addRegionBtn   = document.getElementById('add-region-btn');
 
-// ツール切り替えの一括リセット用
 function deactivateAllTools() {
   addingRegionMode = false;
   if (addRegionBtn) { addRegionBtn.style.background = ''; addRegionBtn.style.borderColor = ''; addRegionBtn.style.color = ''; }
@@ -850,7 +890,6 @@ function drawEditOverlay() {
     oCtx.fillText(region.label || '部位' + (i+1), minX * W + 4, minY * H - 4);
 
     if (isEditing) {
-      // 🌟 固定ピンの描画
       if (region.pins) {
         region.pins.forEach(pin => {
           const px = pin[0] * W, py = pin[1] * H;
@@ -950,6 +989,63 @@ function findRegionContaining(pt) {
   return -1;
 }
 
+// 🌟 インタラクティブ操作用イベントリスナー
+overlayCanvas.addEventListener('mouseenter', e => {
+  if (editMode || !useInteract) return;
+  const pt = getEventPos(e);
+  currentPointerX = targetPointerX = pt.x;
+  currentPointerY = targetPointerY = pt.y;
+  targetPullStrength = interactPointerDown ? 1.8 : 0.8;
+});
+
+overlayCanvas.addEventListener('mousemove', e => {
+  if (!editMode && useInteract) {
+    const pt = getEventPos(e);
+    targetPointerX = pt.x; targetPointerY = pt.y;
+    targetPullStrength = interactPointerDown ? 1.8 : 0.8;
+  }
+});
+
+overlayCanvas.addEventListener('mousedown', e => {
+  if (!editMode && useInteract) {
+    interactPointerDown = true;
+    targetPullStrength = 1.8;
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  interactPointerDown = false;
+  if (targetPullStrength > 0) targetPullStrength = 0.8;
+});
+
+overlayCanvas.addEventListener('mouseleave', e => {
+  if (!editMode) targetPullStrength = 0;
+  interactPointerDown = false;
+});
+
+overlayCanvas.addEventListener('touchstart', e => {
+  if (!editMode && useInteract) {
+    const pt = getEventPos(e);
+    currentPointerX = targetPointerX = pt.x;
+    currentPointerY = targetPointerY = pt.y;
+    interactPointerDown = true;
+    targetPullStrength = 1.8;
+  }
+}, {passive: true});
+
+overlayCanvas.addEventListener('touchmove', e => {
+  if (!editMode && useInteract) {
+    const pt = getEventPos(e);
+    targetPointerX = pt.x; targetPointerY = pt.y;
+  }
+}, {passive: true});
+
+window.addEventListener('touchend', e => {
+  if (!editMode) targetPullStrength = 0;
+  interactPointerDown = false;
+});
+
+// 既存の編集操作用
 function onEditStart(e) {
   if (!editMode) return;
   if (e.touches && e.touches.length >= 2) return; 
@@ -971,7 +1067,6 @@ function onEditStart(e) {
   const pt = getEventPos(e);
   const W = overlayCanvas.width, H = overlayCanvas.height;
 
-  // 🌟 ピン固定ツールの処理
   if (pinToolActive) {
     const region = detectedRegions[editingRegionIdx];
     if (!region.pins) region.pins = [];
@@ -982,14 +1077,14 @@ function onEditStart(e) {
        const px = region.pins[i][0] * W, py = region.pins[i][1] * H;
        if (Math.hypot(pt.x - px, pt.y - py) < 18) {
          saveUndoState();
-         region.pins.splice(i, 1); // 削除
+         region.pins.splice(i, 1); 
          removed = true;
          break;
        }
     }
     if (!removed && pointInPolygon(rx, ry, region.polygon)) {
        saveUndoState();
-       region.pins.push([rx, ry]); // 追加
+       region.pins.push([rx, ry]); 
     }
     drawEditOverlay();
     return;
@@ -1094,7 +1189,7 @@ overlayCanvas.addEventListener('touchmove', onEditMove, { passive: false });
 overlayCanvas.addEventListener('touchend', onEditEnd);
 
 // ============================================================
-// UNDO
+// UNDO & ZOOM
 // ============================================================
 let undoStack = [];
 const MAX_UNDO = 20;
@@ -1104,7 +1199,7 @@ function saveUndoState() {
     ...r, 
     polygon: r.polygon.map(p => [...p]), 
     anchor: r.anchor ? [...r.anchor] : null,
-    pins: r.pins ? r.pins.map(p => [...p]) : [] // 🌟 ピン情報も保存
+    pins: r.pins ? r.pins.map(p => [...p]) : [] 
   }));
   undoStack.push(snapshot);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -1141,10 +1236,8 @@ function drawAddingOverlay() {
   });
 }
 
-// ============================================================
-// PINCH ZOOM & PAN (ズームとパン)
-// ============================================================
 let zoomScale = 1;
+let panX = 0, panY = 0;
 let pinchStartDist = 0;
 let pinchStartScale = 1;
 let pinchStartPanX = 0, pinchStartPanY = 0;
@@ -1193,9 +1286,6 @@ canvasBox.addEventListener('touchmove', e => {
   applyZoom();
 }, { passive: false });
 
-// ============================================================
-// 再検出ボタン
-// ============================================================
 const redetectBtn = document.getElementById('redetect-btn');
 if (redetectBtn) {
   redetectBtn.addEventListener('click', () => {
@@ -1247,7 +1337,6 @@ if (loadProjectBtn && projectFileInput) {
       try {
         const data = JSON.parse(ev.target.result);
         if (data.regions && Array.isArray(data.regions)) {
-          // 🌟 ピン情報を読み込む処理を追加
           detectedRegions = data.regions.map(r => ({
               ...r,
               pins: r.pins ? r.pins : []
@@ -1287,7 +1376,7 @@ if (loadProjectBtn && projectFileInput) {
 }
 
 // ============================================================
-// EXPORT (GIF / WebM)
+// EXPORT
 // ============================================================
 let exportFmt = 'gif';
 let exportFrames = 20;
@@ -1297,10 +1386,10 @@ function segGroupEx(groupId, attr, setter) {
   const group = document.getElementById(groupId);
   if (!group) return;
   group.querySelectorAll('.seg-btn').forEach(btn => {
-    if(btn.id === 'inpaint-toggle-btn') return; 
+    if(btn.id === 'inpaint-toggle-btn' || btn.id === 'interact-toggle-btn') return; 
     btn.addEventListener('click', () => {
       group.querySelectorAll('.seg-btn').forEach(b => {
-        if(b.id === 'inpaint-toggle-btn') return;
+        if(b.id === 'inpaint-toggle-btn' || b.id === 'interact-toggle-btn') return;
         b.style.background = 'var(--surface2)';
         b.style.color = 'var(--muted)';
         b.style.borderColor = 'var(--border)';
@@ -1357,7 +1446,6 @@ if (exportBtn) {
       const offCanvas = document.createElement('canvas');
       offCanvas.width = W; offCanvas.height = H;
       const offCtx = offCanvas.getContext('2d');
-
       const isTransparent = exportFmt === 'webp' || exportFmt === 'apng';
 
       function captureFrame(t) {
