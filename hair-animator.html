@@ -82,6 +82,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 .canvas-box::before {
   content: '';
@@ -284,6 +285,35 @@ input[type=range]::-webkit-slider-thumb {
 #overlay-canvas.edit-mode { pointer-events: all; cursor: crosshair; }
 #overlay-canvas.edit-mode.dragging { cursor: grabbing; }
 
+/* zoom wrapper */
+#canvas-zoom-wrap {
+  position: relative;
+  transform-origin: center center;
+  transition: transform 0.05s;
+  will-change: transform;
+}
+#zoom-controls {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: none;
+  gap: 4px;
+  z-index: 20;
+}
+#zoom-controls.visible { display: flex; }
+.zoom-btn {
+  background: rgba(20,20,30,0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 16px;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.zoom-btn:active { background: rgba(167,139,250,0.3); }
+
 .edit-bar {
   display: none;
   background: var(--surface2);
@@ -361,8 +391,15 @@ input[type=range]::-webkit-slider-thumb {
           <small>PNG / JPG / WebP</small>
         </div>
       </div>
-      <canvas id="main-canvas" style="display:none"></canvas>
-      <canvas id="overlay-canvas" style="display:none"></canvas>
+      <div id="canvas-zoom-wrap">
+        <canvas id="main-canvas" style="display:none"></canvas>
+        <canvas id="overlay-canvas" style="display:none"></canvas>
+      </div>
+      <div id="zoom-controls">
+        <button class="zoom-btn" id="zoom-in-btn">＋</button>
+        <button class="zoom-btn" id="zoom-reset-btn" style="font-size:11px;width:auto;padding:0 6px">100%</button>
+        <button class="zoom-btn" id="zoom-out-btn">－</button>
+      </div>
     </div>
 
     <div class="status-bar">
@@ -371,7 +408,9 @@ input[type=range]::-webkit-slider-thumb {
     </div>
 
     <div class="edit-bar" id="edit-bar">
-      <div class="edit-tip"><b>編集モード：</b>頂点をドラッグして移動 / 辺をクリックで追加 / 頂点をダブルクリックで削除</div>
+      <div class="edit-tip" id="edit-tip-text"><b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除</div>
+      <button class="btn-edit" id="undo-btn" title="元に戻す">↩ Undo</button>
+      <button class="btn-edit" id="add-region-btn" title="部位を新規追加">＋ 部位追加</button>
       <button class="btn-edit danger" id="edit-done-btn">✓ 完了</button>
     </div>
   </div>
@@ -393,6 +432,7 @@ input[type=range]::-webkit-slider-thumb {
         </div>
       </div>
       <button class="btn-primary" id="detect-btn" disabled>✨ 部位を自動検出</button>
+      <button class="btn-secondary" id="redetect-btn" style="display:none;margin-top:6px">🔄 再検出する</button>
     </div>
 
     <div class="panel" id="regions-panel" style="display:none">
@@ -685,6 +725,10 @@ detectBtn.addEventListener('click', async () => {
     animPanel.style.display = 'block';
     const exPanel = document.getElementById('export-panel');
     if (exPanel) exPanel.style.display = 'block';
+    const rdb = document.getElementById('redetect-btn');
+    if (rdb) rdb.style.display = 'block';
+    undoStack = [];
+    saveUndoState();
     setStatus('done', `${detectedRegions.length}つの部位を検出しました。`);
     detectBtn.disabled = false;
 
@@ -888,6 +932,21 @@ function renderAnimFrame(t) {
     const anchorX = (region.anchor?.[0] ?? 0.5) * W;
     const anchorY = (region.anchor?.[1] ?? 0) * H;
 
+    // アンカー自動追従: 部位サイズに応じてinfluenceのスケールを自動調整
+    const regionDiag = Math.hypot(maxX - minX, maxY - minY);
+    const influenceScale = regionDiag > 0 ? regionDiag * 0.6 : 100;
+
+    // Get bounding box of polygon
+    const xs = region.polygon.map(([x]) => x * W);
+    const ys = region.polygon.map(([, y]) => y * H);
+    const minX = Math.max(0, Math.floor(Math.min(...xs)) - 2);
+    const maxX = Math.min(W, Math.ceil(Math.max(...xs)) + 2);
+    const minY = Math.max(0, Math.floor(Math.min(...ys)) - 2);
+    const maxY = Math.min(H, Math.ceil(Math.max(...ys)) + 2);
+
+    const anchorX = (region.anchor?.[0] ?? 0.5) * W;
+    const anchorY = (region.anchor?.[1] ?? 0) * H;
+
     // Extract region pixels from original
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
@@ -920,13 +979,14 @@ function renderAnimFrame(t) {
 
         // Inside polygon: apply warp based on distance from anchor
         const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
-        const influence = Math.min(distFromAnchor / 100, 1) * rAmp;
+        // アンカー自動追従: 部位サイズに応じたinfluenceScale
+        const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp;
 
         let offsetX = 0, offsetY = 0;
         if (rType === 'sway') {
           offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
           offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
-        } else if (rType === 'wave') {
+        } else if (rType === 'wave' || rType === 'flutter') {
           offsetX = Math.sin(phase + distFromAnchor * 0.04 * smooth) * influence * 0.5;
           offsetY = Math.sin(phase * 1.2 + distFromAnchor * 0.03 * smooth) * influence;
         } else if (rType === 'bounce') {
@@ -938,10 +998,16 @@ function renderAnimFrame(t) {
           offsetX = wave * influence * 0.6;
           offsetY = Math.cos(phase + distFromAnchor * 0.03) * influence * 0.6;
         } else {
-          // fallback: sway
           offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
           offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
         }
+
+        // 境界なめらか化: ポリゴン境界に近いほどアルファをフェード
+        const FADE_PX = 4;
+        const dLeft = worldX - minX, dRight = maxX - worldX;
+        const dTop = worldY - minY, dBottom = maxY - worldY;
+        const minEdgeDist = Math.min(dLeft, dRight, dTop, dBottom);
+        const edgeFade = minEdgeDist < FADE_PX ? minEdgeDist / FADE_PX : 1;
 
         const srcX = Math.round(px - offsetX);
         const srcY = Math.round(py - offsetY);
@@ -952,7 +1018,8 @@ function renderAnimFrame(t) {
           dst[idx]   = src[srcIdx];
           dst[idx+1] = src[srcIdx+1];
           dst[idx+2] = src[srcIdx+2];
-          dst[idx+3] = src[srcIdx+3];
+          // 境界フェード適用
+          dst[idx+3] = Math.round(src[srcIdx+3] * edgeFade);
         } else {
           dst[idx+3] = 0;
         }
@@ -1021,23 +1088,32 @@ const editDoneBtn = document.getElementById('edit-done-btn');
 if (editBtn && editBar && editDoneBtn) {
   editBtn.addEventListener('click', () => {
     if (detectedRegions.length === 0) return;
+    editMode = false; addingRegionMode = false;
     editMode = true;
     editingRegionIdx = detectedRegions.findIndex(r => r.enabled);
     if (editingRegionIdx < 0) editingRegionIdx = 0;
     overlayCanvas.classList.add('edit-mode');
     editBar.classList.add('visible');
-    const tip = editBar.querySelector('.edit-tip');
-    if (tip) tip.innerHTML = '<b>編集モード：</b>頂点をドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除 / 部位中央タップで切替';
+    const tip = document.getElementById('edit-tip-text');
+    if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除 / ⚓ドラッグでアンカー移動';
     stopAnim();
+    saveUndoState();
     drawEditOverlay();
+    const zc = document.getElementById('zoom-controls');
+    if (zc) zc.classList.add('visible');
   });
 
   editDoneBtn.addEventListener('click', () => {
     editMode = false;
+    addingRegionMode = false;
     editingRegionIdx = -1;
     draggingVertexIdx = -1;
+    draggingAnchor = false;
     overlayCanvas.classList.remove('edit-mode');
     editBar.classList.remove('visible');
+    resetZoom();
+    const zc = document.getElementById('zoom-controls');
+    if (zc) zc.classList.remove('visible');
     drawOverlay();
     startAnim();
   });
@@ -1216,15 +1292,63 @@ function findRegionContaining(pt) {
 
 function onEditStart(e) {
   if (!editMode || editingRegionIdx < 0) return;
+  if (e.touches && e.touches.length === 2) return; // ピンチは無視
   e.preventDefault();
   const pt = getEventPos(e);
-  const region = detectedRegions[editingRegionIdx];
   const W = overlayCanvas.width, H = overlayCanvas.height;
 
-  // 0. アンカー点をつかんだか？（頂点より先に判定）
+  // 部位追加モード
+  if (addingRegionMode) {
+    const rx = pt.x / W, ry = pt.y / H;
+    // 最初の点に近ければ確定
+    if (newRegionPoints.length >= 3) {
+      const [fx, fy] = newRegionPoints[0];
+      if (Math.hypot((rx - fx) * W, (ry - fy) * H) < 18) {
+        // 確定: 新しい部位として追加
+        saveUndoState();
+        const colors = ['#a78bfa','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171'];
+        const xs = newRegionPoints.map(p => p[0]);
+        const ys = newRegionPoints.map(p => p[1]);
+        const cx = xs.reduce((a,b)=>a+b,0)/xs.length;
+        const cy = ys.reduce((a,b)=>a+b,0)/ys.length;
+        detectedRegions.push({
+          label: '部位' + (detectedRegions.length + 1),
+          polygon: newRegionPoints.map(p => [...p]),
+          anchor: [cx, Math.min(...ys)],
+          color: colors[detectedRegions.length % colors.length],
+          enabled: true,
+          animOffset: Math.random() * Math.PI * 2,
+          animType: null, animSpd: null, animAmp: null,
+          description: '手動追加',
+        });
+        editingRegionIdx = detectedRegions.length - 1;
+        newRegionPoints = [];
+        addingRegionMode = false;
+        if (addRegionBtn) {
+          addRegionBtn.style.background = '';
+          addRegionBtn.style.borderColor = '';
+          addRegionBtn.style.color = '';
+        }
+        const tip = document.getElementById('edit-tip-text');
+        if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除';
+        renderRegionList();
+        saveUndoState();
+        drawEditOverlay();
+        return;
+      }
+    }
+    newRegionPoints.push([rx, ry]);
+    drawAddingOverlay();
+    return;
+  }
+
+  const region = detectedRegions[editingRegionIdx];
+
+  // 0. アンカー点をつかんだか？
   if (region.anchor) {
     const ax = region.anchor[0] * W, ay = region.anchor[1] * H;
     if (Math.hypot(pt.x - ax, pt.y - ay) < 20) {
+      saveUndoState();
       draggingAnchor = true;
       overlayCanvas.classList.add('dragging');
       return;
@@ -1234,27 +1358,27 @@ function onEditStart(e) {
   // 1. 頂点をつかんだか？
   const vidx = findNearestVertex(pt);
   if (vidx >= 0) {
-    // ダブルタップ判定（削除）
     const now = Date.now();
     if (now - lastTapTime < 400 && lastTapVertexIdx === vidx) {
       if (region.polygon.length > 3) {
+        saveUndoState();
         region.polygon.splice(vidx, 1);
         drawEditOverlay();
       }
-      lastTapTime = 0;
-      lastTapVertexIdx = -1;
+      lastTapTime = 0; lastTapVertexIdx = -1;
       return;
     }
-    lastTapTime = now;
-    lastTapVertexIdx = vidx;
+    lastTapTime = now; lastTapVertexIdx = vidx;
+    saveUndoState();
     draggingVertexIdx = vidx;
     overlayCanvas.classList.add('dragging');
     return;
   }
 
-  // 2. 辺の上をタップしたか？（頂点追加）
+  // 2. 辺の上をタップ（頂点追加）
   const edge = findEdgeInsertPoint(pt);
   if (edge) {
+    saveUndoState();
     region.polygon.splice(edge.insertAfter + 1, 0, edge.point);
     draggingVertexIdx = edge.insertAfter + 1;
     overlayCanvas.classList.add('dragging');
@@ -1262,7 +1386,7 @@ function onEditStart(e) {
     return;
   }
 
-  // 3. 他の部位の内部をタップ → 編集対象切り替え
+  // 3. 他の部位をタップ → 切り替え
   const ridx = findRegionContaining(pt);
   if (ridx >= 0 && ridx !== editingRegionIdx) {
     editingRegionIdx = ridx;
@@ -1309,6 +1433,159 @@ overlayCanvas.addEventListener('mouseleave', onEditEnd);
 overlayCanvas.addEventListener('touchstart', onEditStart, { passive: false });
 overlayCanvas.addEventListener('touchmove', onEditMove, { passive: false });
 overlayCanvas.addEventListener('touchend', onEditEnd);
+
+// ============================================================
+// UNDO
+// ============================================================
+let undoStack = [];
+const MAX_UNDO = 20;
+
+function saveUndoState() {
+  const snapshot = detectedRegions.map(r => ({
+    ...r,
+    polygon: r.polygon.map(p => [...p]),
+    anchor: r.anchor ? [...r.anchor] : null,
+  }));
+  undoStack.push(snapshot);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+function undo() {
+  if (undoStack.length < 2) return;
+  undoStack.pop();
+  const prev = undoStack[undoStack.length - 1];
+  detectedRegions = prev.map(r => ({
+    ...r,
+    polygon: r.polygon.map(p => [...p]),
+    anchor: r.anchor ? [...r.anchor] : null,
+  }));
+  if (editingRegionIdx >= detectedRegions.length) editingRegionIdx = detectedRegions.length - 1;
+  drawEditOverlay();
+}
+
+const undoBtn = document.getElementById('undo-btn');
+if (undoBtn) undoBtn.addEventListener('click', undo);
+
+// ============================================================
+// 部位を新規手動追加
+// ============================================================
+let addingRegionMode = false;
+let newRegionPoints = [];
+
+const addRegionBtn = document.getElementById('add-region-btn');
+if (addRegionBtn) {
+  addRegionBtn.addEventListener('click', () => {
+    addingRegionMode = !addingRegionMode;
+    newRegionPoints = [];
+    const tip = document.getElementById('edit-tip-text');
+    if (addingRegionMode) {
+      addRegionBtn.style.background = 'rgba(167,139,250,0.2)';
+      addRegionBtn.style.borderColor = 'var(--accent)';
+      addRegionBtn.style.color = 'var(--accent)';
+      if (tip) tip.innerHTML = '<b>部位追加：</b>タップで頂点を打つ（3点以上）→ 最初の点をタップで確定';
+    } else {
+      addRegionBtn.style.background = '';
+      addRegionBtn.style.borderColor = '';
+      addRegionBtn.style.color = '';
+      if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除';
+      newRegionPoints = [];
+      drawEditOverlay();
+    }
+  });
+}
+
+function drawAddingOverlay() {
+  drawEditOverlay();
+  if (newRegionPoints.length === 0) return;
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+  oCtx.beginPath();
+  newRegionPoints.forEach(([px, py], idx) => {
+    const x = px * W, y = py * H;
+    idx === 0 ? oCtx.moveTo(x, y) : oCtx.lineTo(x, y);
+  });
+  oCtx.strokeStyle = '#fff';
+  oCtx.lineWidth = 1.5;
+  oCtx.setLineDash([4, 4]);
+  oCtx.stroke();
+  oCtx.setLineDash([]);
+  newRegionPoints.forEach(([px, py], idx) => {
+    const x = px * W, y = py * H;
+    oCtx.beginPath();
+    oCtx.arc(x, y, idx === 0 ? 10 : 7, 0, Math.PI * 2);
+    oCtx.fillStyle = idx === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(167,139,250,0.9)';
+    oCtx.fill();
+    oCtx.strokeStyle = 'var(--accent)';
+    oCtx.lineWidth = 2;
+    oCtx.stroke();
+  });
+}
+
+// ============================================================
+// PINCH ZOOM
+// ============================================================
+let zoomScale = 1;
+let zoomOriginX = 0.5, zoomOriginY = 0.5;
+let pinchStartDist = 0;
+let pinchStartScale = 1;
+const MIN_ZOOM = 1, MAX_ZOOM = 5;
+const zoomWrap = document.getElementById('canvas-zoom-wrap');
+
+function applyZoom() {
+  if (!zoomWrap) return;
+  zoomWrap.style.transformOrigin = `${zoomOriginX * 100}% ${zoomOriginY * 100}%`;
+  zoomWrap.style.transform = `scale(${zoomScale})`;
+  const zBtn = document.getElementById('zoom-reset-btn');
+  if (zBtn) zBtn.textContent = Math.round(zoomScale * 100) + '%';
+}
+
+function resetZoom() {
+  zoomScale = 1; zoomOriginX = 0.5; zoomOriginY = 0.5;
+  applyZoom();
+}
+
+document.getElementById('zoom-in-btn')?.addEventListener('click', () => {
+  zoomScale = Math.min(MAX_ZOOM, zoomScale * 1.4); applyZoom();
+});
+document.getElementById('zoom-out-btn')?.addEventListener('click', () => {
+  zoomScale = Math.max(MIN_ZOOM, zoomScale / 1.4); applyZoom();
+});
+document.getElementById('zoom-reset-btn')?.addEventListener('click', resetZoom);
+
+canvasBox.addEventListener('touchstart', e => {
+  if (!editMode || e.touches.length !== 2) return;
+  pinchStartDist = Math.hypot(
+    e.touches[0].clientX - e.touches[1].clientX,
+    e.touches[0].clientY - e.touches[1].clientY
+  );
+  pinchStartScale = zoomScale;
+  const rect = canvasBox.getBoundingClientRect();
+  zoomOriginX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) / rect.width;
+  zoomOriginY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top) / rect.height;
+}, { passive: true });
+
+canvasBox.addEventListener('touchmove', e => {
+  if (!editMode || e.touches.length !== 2) return;
+  e.preventDefault();
+  const dist = Math.hypot(
+    e.touches[0].clientX - e.touches[1].clientX,
+    e.touches[0].clientY - e.touches[1].clientY
+  );
+  zoomScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartScale * (dist / pinchStartDist)));
+  applyZoom();
+}, { passive: false });
+
+// ============================================================
+// 再検出ボタン
+// ============================================================
+const redetectBtn = document.getElementById('redetect-btn');
+if (redetectBtn) {
+  redetectBtn.addEventListener('click', () => {
+    stopAnim();
+    detectedRegions = [];
+    undoStack = [];
+    document.getElementById('detect-btn').click();
+  });
+}
 
 // ============================================================
 // EXPORT (GIF / WebM)
