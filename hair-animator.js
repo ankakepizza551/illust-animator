@@ -15,7 +15,6 @@ let originalCanvas = null;
 let inpaintBaseCanvas = null; 
 let useInpaint = false;
 
-// 🌟 インタラクティブ（お触り）機能用のステート
 let useInteract = true;
 let targetPointerX = -1000, targetPointerY = -1000;
 let currentPointerX = -1000, currentPointerY = -1000;
@@ -241,6 +240,7 @@ function renderRegionList() {
     const item = document.createElement('div');
     item.className = 'region-item' + (region.enabled ? ' active' : '');
 
+    // 🌟 ゴミ箱（削除）ボタンを追加
     item.innerHTML = `
       <div class="region-color" style="background:${region.color}"></div>
       <div class="region-label" style="flex:1;">
@@ -251,11 +251,13 @@ function renderRegionList() {
         <button class="layer-up" style="background:none; border:none; color:${i === 0 ? 'transparent' : 'var(--muted)'}; cursor:${i === 0 ? 'default' : 'pointer'}; font-size:10px; padding:2px;" title="順序を奥へ">▲</button>
         <button class="layer-down" style="background:none; border:none; color:${i === detectedRegions.length - 1 ? 'transparent' : 'var(--muted)'}; cursor:${i === detectedRegions.length - 1 ? 'default' : 'pointer'}; font-size:10px; padding:2px;" title="順序を手前へ">▼</button>
       </div>
+      <button class="layer-delete" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:13px; margin-right:6px; padding:4px;" title="この部位を削除">🗑️</button>
       <div class="region-toggle ${region.enabled ? 'on' : ''}" data-idx="${i}"></div>
     `;
 
     const upBtn = item.querySelector('.layer-up');
     const downBtn = item.querySelector('.layer-down');
+    const delBtn = item.querySelector('.layer-delete');
     
     if (i > 0) {
       upBtn.addEventListener('click', (e) => {
@@ -281,6 +283,20 @@ function renderRegionList() {
         if(editMode) drawEditOverlay(); else drawOverlay();
       });
     }
+
+    // 🌟 ゴミ箱ボタンの処理
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`「${region.label}」を削除してもよろしいですか？`)) {
+        saveUndoState();
+        detectedRegions.splice(i, 1);
+        if (editingRegionIdx === i) editingRegionIdx = -1;
+        else if (editingRegionIdx > i) editingRegionIdx--;
+        renderRegionList();
+        cacheInpaintedBackgrounds();
+        if(editMode) drawEditOverlay(); else drawOverlay();
+      }
+    });
 
     item.querySelector('.region-toggle').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -473,7 +489,7 @@ if (inpaintToggleBtn) {
   });
 }
 
-// 🌟 INTERACTIVE TOGGLE
+// INTERACTIVE TOGGLE
 const interactToggleBtn = document.getElementById('interact-toggle-btn');
 if (interactToggleBtn) {
   interactToggleBtn.addEventListener('click', () => {
@@ -553,7 +569,6 @@ function renderAnimFrame(t) {
   const smooth  = parseFloat(document.getElementById('smooth').value);
   const feather = parseFloat(document.getElementById('feather').value);
 
-  // 🌟 マウスポインタの動きを滑らかにする（バネのような戻り）
   currentPointerX += (targetPointerX - currentPointerX) * 0.15;
   currentPointerY += (targetPointerY - currentPointerY) * 0.15;
   currentPullStrength += (targetPullStrength - currentPullStrength) * 0.1;
@@ -675,16 +690,14 @@ function renderAnimFrame(t) {
           offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
         }
 
-        // 🌟 インタラクティブお触り計算
         let interactX = 0, interactY = 0;
         if (useInteract && currentPullStrength > 0.01) {
           const pdx = currentPointerX - worldX;
           const pdy = currentPointerY - worldY;
           const pDist = Math.sqrt(pdx*pdx + pdy*pdy);
-          const pRad = 150; // 指で引っ張れる影響範囲(px)
+          const pRad = 150; 
           if (pDist < pRad && pDist > 0) {
             const pull = (1 - pDist / pRad) * 20 * currentPullStrength;
-            // 根元やピンは引っ張られないように正規化
             const normInfl = rAmp > 0 ? Math.min(influence / rAmp, 1) : 0;
             interactX = (pdx / pDist) * pull * normInfl;
             interactY = (pdy / pDist) * pull * normInfl;
@@ -944,12 +957,13 @@ function findNearestVertex(pt) {
   return bestIdx;
 }
 
+// 🌟 辺をタップ（クリック）して追加する時の当たり判定を 14 -> 20 に拡大して追加しやすくしました
 function findEdgeInsertPoint(pt) {
   if (editingRegionIdx < 0) return null;
   const region = detectedRegions[editingRegionIdx];
   if (!region || !region.polygon || region.polygon.length < 2) return null;
   const W = overlayCanvas.width, H = overlayCanvas.height;
-  const threshold = 14;
+  const threshold = 20; 
   let best = null;
   for (let i = 0; i < region.polygon.length; i++) {
     const j = (i + 1) % region.polygon.length;
@@ -989,7 +1003,6 @@ function findRegionContaining(pt) {
   return -1;
 }
 
-// 🌟 インタラクティブ操作用イベントリスナー
 overlayCanvas.addEventListener('mouseenter', e => {
   if (editMode || !useInteract) return;
   const pt = getEventPos(e);
@@ -1045,7 +1058,6 @@ window.addEventListener('touchend', e => {
   interactPointerDown = false;
 });
 
-// 既存の編集操作用
 function onEditStart(e) {
   if (!editMode) return;
   if (e.touches && e.touches.length >= 2) return; 
@@ -1135,7 +1147,14 @@ function onEditStart(e) {
   }
 
   const edge = findEdgeInsertPoint(pt);
-  if (edge) { saveUndoState(); region.polygon.splice(edge.insertAfter + 1, 0, edge.point); draggingVertexIdx = edge.insertAfter + 1; overlayCanvas.classList.add('dragging'); drawEditOverlay(); return; }
+  if (edge) { 
+    saveUndoState(); 
+    region.polygon.splice(edge.insertAfter + 1, 0, edge.point); 
+    draggingVertexIdx = edge.insertAfter + 1; 
+    overlayCanvas.classList.add('dragging'); 
+    drawEditOverlay(); 
+    return; 
+  }
 
   const ridx = findRegionContaining(pt);
   if (ridx >= 0 && ridx !== editingRegionIdx) { editingRegionIdx = ridx; drawEditOverlay(); }
