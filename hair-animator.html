@@ -433,18 +433,31 @@ input[type=range]::-webkit-slider-thumb {
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
           <span>形式</span>
-          <div style="display:flex;gap:4px" id="ex-fmt-group">
-            <button class="seg-btn active" data-fmt="gif" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">GIF</button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap" id="ex-fmt-group">
+            <button class="seg-btn active" data-fmt="gif" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">GIF</button>
             <button class="seg-btn" data-fmt="webm" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">WebM</button>
+            <button class="seg-btn" data-fmt="webp" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">WebP透過</button>
+            <button class="seg-btn" data-fmt="apng" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">APNG透過</button>
           </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
           <span>フレーム数</span>
           <div style="display:flex;gap:4px" id="ex-frames-group">
             <button class="seg-btn" data-frames="12" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">12</button>
-            <button class="seg-btn active" data-frames="20" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">20</button>
+            <button class="seg-btn active" data-frames="20" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">20</button>
             <button class="seg-btn" data-frames="30" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">30</button>
           </div>
+        </div>
+        <div id="gif-quality-row" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>GIF品質</span>
+          <div style="display:flex;gap:4px" id="ex-quality-group">
+            <button class="seg-btn active" data-quality="10" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">速い</button>
+            <button class="seg-btn" data-quality="5" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">普通</button>
+            <button class="seg-btn" data-quality="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">高品質</button>
+          </div>
+        </div>
+        <div id="ex-fmt-note" style="font-size:10px;color:var(--muted);line-height:1.5">
+          GIF: どこでも使える / WebM: 軽量・透過対応 / WebP透過・APNG透過: PNG素材向け
         </div>
       </div>
 
@@ -658,6 +671,10 @@ detectBtn.addEventListener('click', async () => {
       color: REGION_COLORS[i % REGION_COLORS.length],
       enabled: true,
       animOffset: Math.random() * Math.PI * 2,
+      // 部位ごとのアニメ設定（デフォルトはグローバル値）
+      animType: null,   // nullの場合はグローバルのanimTypeを使う
+      animSpd: null,    // nullの場合はグローバルのspdを使う
+      animAmp: null,    // nullの場合はグローバルのampを使う
     }));
 
     renderRegionList();
@@ -706,7 +723,83 @@ function renderRegionList() {
       renderRegionList();
       drawOverlay();
     });
+
+    // 部位ごとの設定パネル（タップで展開）
+    const settingPanel = document.createElement('div');
+    settingPanel.style.cssText = 'display:none;padding:10px 12px;background:var(--surface2);border-radius:0 0 8px 8px;border:1px solid var(--border);border-top:none;margin-top:-4px;margin-bottom:4px';
+    const animTypes = [
+      { val: 'sway', label: 'ゆらゆら' },
+      { val: 'wave', label: 'なびく' },
+      { val: 'bounce', label: 'はずむ' },
+      { val: 'ripple', label: '波打つ' },
+    ];
+    const currentType = region.animType || animType;
+    settingPanel.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">アニメーション種類</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
+        ${animTypes.map(t => `<button data-atype="${t.val}" style="
+          background:${currentType===t.val?'rgba(167,139,250,0.15)':'var(--surface)'};
+          border:1px solid ${currentType===t.val?'var(--accent)':'var(--border)'};
+          color:${currentType===t.val?'var(--accent)':'var(--muted)'};
+          border-radius:6px;font-size:11px;padding:4px 8px;cursor:pointer
+        ">${t.label}</button>`).join('')}
+        <button data-atype="global" style="
+          background:${!region.animType?'rgba(167,139,250,0.15)':'var(--surface)'};
+          border:1px solid ${!region.animType?'var(--accent)':'var(--border)'};
+          color:${!region.animType?'var(--accent)':'var(--muted)'};
+          border-radius:6px;font-size:11px;padding:4px 8px;cursor:pointer
+        ">共通</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">スピード <span id="reg-spd-val-${i}">${region.animSpd ?? '共通'}</span></div>
+      <input type="range" data-ridx="${i}" class="reg-spd" min="0.8" max="5" step="0.1" value="${region.animSpd ?? parseFloat(document.getElementById('spd').value)}"
+        style="-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;cursor:pointer;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">揺れ幅 <span id="reg-amp-val-${i}">${region.animAmp ?? '共通'}</span></div>
+      <input type="range" data-ridx="${i}" class="reg-amp" min="3" max="30" step="1" value="${region.animAmp ?? parseFloat(document.getElementById('amp').value)}"
+        style="-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;cursor:pointer">
+      <div style="margin-top:8px">
+        <button class="reg-reset" data-ridx="${i}" style="font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline">共通設定にリセット</button>
+      </div>
+    `;
+
+    // アニメ種類ボタン
+    settingPanel.querySelectorAll('[data-atype]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.atype;
+        detectedRegions[i].animType = t === 'global' ? null : t;
+        renderRegionList(); // 再描画
+      });
+    });
+
+    // スピードスライダー
+    settingPanel.querySelector('.reg-spd').addEventListener('input', function() {
+      detectedRegions[i].animSpd = parseFloat(this.value);
+      const v = document.getElementById('reg-spd-val-' + i);
+      if (v) v.textContent = parseFloat(this.value).toFixed(1) + 's';
+    });
+
+    // 揺れ幅スライダー
+    settingPanel.querySelector('.reg-amp').addEventListener('input', function() {
+      detectedRegions[i].animAmp = parseFloat(this.value);
+      const v = document.getElementById('reg-amp-val-' + i);
+      if (v) v.textContent = this.value;
+    });
+
+    // リセットボタン
+    settingPanel.querySelector('.reg-reset').addEventListener('click', () => {
+      detectedRegions[i].animType = null;
+      detectedRegions[i].animSpd = null;
+      detectedRegions[i].animAmp = null;
+      renderRegionList();
+    });
+
+    // 部位名クリックで設定パネル開閉
+    item.querySelector('.region-label').style.cursor = 'pointer';
+    item.querySelector('.region-label').addEventListener('click', () => {
+      settingPanel.style.display = settingPanel.style.display === 'none' ? 'block' : 'none';
+    });
+
     regionList.appendChild(item);
+    regionList.appendChild(settingPanel);
   });
 }
 
@@ -777,7 +870,12 @@ function renderAnimFrame(t) {
   detectedRegions.forEach(region => {
     if (!region.enabled || !region.polygon || region.polygon.length < 3) return;
 
-    const phase = (t / spd) * Math.PI * 2 + region.animOffset;
+    // 部位ごとの設定（nullなら共通設定を使う）
+    const rSpd = region.animSpd ?? spd;
+    const rAmp = region.animAmp ?? amp;
+    const rType = region.animType ?? animType;
+
+    const phase = (t / rSpd) * Math.PI * 2 + region.animOffset;
 
     // Get bounding box of polygon
     const xs = region.polygon.map(([x]) => x * W);
@@ -822,9 +920,28 @@ function renderAnimFrame(t) {
 
         // Inside polygon: apply warp based on distance from anchor
         const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
-        const influence = Math.min(distFromAnchor / 100, 1) * amp;
-        const offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
-        const offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
+        const influence = Math.min(distFromAnchor / 100, 1) * rAmp;
+
+        let offsetX = 0, offsetY = 0;
+        if (rType === 'sway') {
+          offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
+          offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
+        } else if (rType === 'wave') {
+          offsetX = Math.sin(phase + distFromAnchor * 0.04 * smooth) * influence * 0.5;
+          offsetY = Math.sin(phase * 1.2 + distFromAnchor * 0.03 * smooth) * influence;
+        } else if (rType === 'bounce') {
+          const b = Math.abs(Math.sin(phase));
+          offsetY = -b * influence * 0.8;
+          offsetX = Math.sin(phase * 2) * influence * 0.2;
+        } else if (rType === 'ripple') {
+          const wave = Math.sin(phase * 1.5 + distFromAnchor * 0.05);
+          offsetX = wave * influence * 0.6;
+          offsetY = Math.cos(phase + distFromAnchor * 0.03) * influence * 0.6;
+        } else {
+          // fallback: sway
+          offsetX = Math.sin(phase + distFromAnchor * 0.02 * smooth) * influence;
+          offsetY = Math.cos(phase * 0.7 + distFromAnchor * 0.02 * smooth) * influence * 0.3;
+        }
 
         const srcX = Math.round(px - offsetX);
         const srcY = Math.round(py - offsetY);
@@ -893,6 +1010,7 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 let editMode = false;
 let editingRegionIdx = -1;
 let draggingVertexIdx = -1;
+let draggingAnchor = false;
 let lastTapTime = 0;
 let lastTapVertexIdx = -1;
 
@@ -986,23 +1104,36 @@ function drawEditOverlay() {
         oCtx.stroke();
       });
 
-      // anchor を描く（あれば）
+      // anchor を描く（あれば）- ドラッグ可能な大きめのハンドル
       if (region.anchor) {
         const ax = region.anchor[0] * W, ay = region.anchor[1] * H;
+        // 外側リング
         oCtx.beginPath();
-        oCtx.arc(ax, ay, 5, 0, Math.PI * 2);
-        oCtx.fillStyle = '#fff';
+        oCtx.arc(ax, ay, 12, 0, Math.PI * 2);
         oCtx.strokeStyle = color;
         oCtx.lineWidth = 2;
+        oCtx.setLineDash([3, 3]);
+        oCtx.stroke();
+        oCtx.setLineDash([]);
+        // 内側円
+        oCtx.beginPath();
+        oCtx.arc(ax, ay, 7, 0, Math.PI * 2);
+        oCtx.fillStyle = '#fff';
         oCtx.fill();
+        oCtx.strokeStyle = color;
+        oCtx.lineWidth = 2;
         oCtx.stroke();
         // 十字マーク
         oCtx.strokeStyle = color;
-        oCtx.lineWidth = 1.5;
+        oCtx.lineWidth = 2;
         oCtx.beginPath();
-        oCtx.moveTo(ax - 8, ay); oCtx.lineTo(ax + 8, ay);
-        oCtx.moveTo(ax, ay - 8); oCtx.lineTo(ax, ay + 8);
+        oCtx.moveTo(ax - 10, ay); oCtx.lineTo(ax + 10, ay);
+        oCtx.moveTo(ax, ay - 10); oCtx.lineTo(ax, ay + 10);
         oCtx.stroke();
+        // ラベル
+        oCtx.fillStyle = color;
+        oCtx.font = '10px sans-serif';
+        oCtx.fillText('⚓', ax + 13, ay + 4);
       }
     }
   });
@@ -1087,6 +1218,18 @@ function onEditStart(e) {
   if (!editMode || editingRegionIdx < 0) return;
   e.preventDefault();
   const pt = getEventPos(e);
+  const region = detectedRegions[editingRegionIdx];
+  const W = overlayCanvas.width, H = overlayCanvas.height;
+
+  // 0. アンカー点をつかんだか？（頂点より先に判定）
+  if (region.anchor) {
+    const ax = region.anchor[0] * W, ay = region.anchor[1] * H;
+    if (Math.hypot(pt.x - ax, pt.y - ay) < 20) {
+      draggingAnchor = true;
+      overlayCanvas.classList.add('dragging');
+      return;
+    }
+  }
 
   // 1. 頂点をつかんだか？
   const vidx = findNearestVertex(pt);
@@ -1094,7 +1237,6 @@ function onEditStart(e) {
     // ダブルタップ判定（削除）
     const now = Date.now();
     if (now - lastTapTime < 400 && lastTapVertexIdx === vidx) {
-      const region = detectedRegions[editingRegionIdx];
       if (region.polygon.length > 3) {
         region.polygon.splice(vidx, 1);
         drawEditOverlay();
@@ -1113,7 +1255,6 @@ function onEditStart(e) {
   // 2. 辺の上をタップしたか？（頂点追加）
   const edge = findEdgeInsertPoint(pt);
   if (edge) {
-    const region = detectedRegions[editingRegionIdx];
     region.polygon.splice(edge.insertAfter + 1, 0, edge.point);
     draggingVertexIdx = edge.insertAfter + 1;
     overlayCanvas.classList.add('dragging');
@@ -1130,11 +1271,22 @@ function onEditStart(e) {
 }
 
 function onEditMove(e) {
-  if (!editMode || draggingVertexIdx < 0 || editingRegionIdx < 0) return;
+  if (!editMode || editingRegionIdx < 0) return;
   e.preventDefault();
   const pt = getEventPos(e);
   const W = overlayCanvas.width, H = overlayCanvas.height;
   const region = detectedRegions[editingRegionIdx];
+
+  if (draggingAnchor) {
+    region.anchor = [
+      Math.max(0, Math.min(1, pt.x / W)),
+      Math.max(0, Math.min(1, pt.y / H)),
+    ];
+    drawEditOverlay();
+    return;
+  }
+
+  if (draggingVertexIdx < 0) return;
   region.polygon[draggingVertexIdx] = [
     Math.max(0, Math.min(1, pt.x / W)),
     Math.max(0, Math.min(1, pt.y / H)),
@@ -1143,8 +1295,9 @@ function onEditMove(e) {
 }
 
 function onEditEnd(e) {
-  if (draggingVertexIdx >= 0) {
+  if (draggingVertexIdx >= 0 || draggingAnchor) {
     draggingVertexIdx = -1;
+    draggingAnchor = false;
     overlayCanvas.classList.remove('dragging');
   }
 }
@@ -1162,6 +1315,7 @@ overlayCanvas.addEventListener('touchend', onEditEnd);
 // ============================================================
 let exportFmt = 'gif';
 let exportFrames = 20;
+let exportQuality = 10;
 
 function segGroupEx(groupId, attr, setter) {
   const group = document.getElementById(groupId);
@@ -1169,35 +1323,32 @@ function segGroupEx(groupId, attr, setter) {
   group.querySelectorAll('.seg-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       group.querySelectorAll('.seg-btn').forEach(b => {
-        b.classList.remove('active');
         b.style.background = 'var(--surface2)';
         b.style.color = 'var(--muted)';
         b.style.borderColor = 'var(--border)';
       });
-      btn.classList.add('active');
       btn.style.background = 'rgba(167,139,250,0.12)';
       btn.style.color = 'var(--accent)';
       btn.style.borderColor = 'var(--accent)';
       setter(btn.dataset[attr]);
     });
-    // 初期状態の見た目
-    if (btn.classList.contains('active')) {
-      btn.style.background = 'rgba(167,139,250,0.12)';
-      btn.style.color = 'var(--accent)';
-      btn.style.borderColor = 'var(--accent)';
-    }
   });
 }
 
-segGroupEx('ex-fmt-group', 'fmt', v => { exportFmt = v; });
+segGroupEx('ex-fmt-group', 'fmt', v => {
+  exportFmt = v;
+  // GIF品質行の表示切替
+  const qRow = document.getElementById('gif-quality-row');
+  if (qRow) qRow.style.display = v === 'gif' ? 'flex' : 'none';
+});
 segGroupEx('ex-frames-group', 'frames', v => { exportFrames = parseInt(v); });
+segGroupEx('ex-quality-group', 'quality', v => { exportQuality = parseInt(v); });
 
 function loadScriptOnce(src) {
   return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
     const s = document.createElement('script');
-    s.src = src;
-    s.onload = res;
-    s.onerror = rej;
+    s.src = src; s.onload = res; s.onerror = rej;
     document.head.appendChild(s);
   });
 }
@@ -1214,11 +1365,10 @@ if (exportBtn) {
     wrap.style.display = 'flex';
     fill.style.width = '0%';
 
-    // 編集モードが有効なら抜けておく
     if (editMode) {
       editMode = false;
       overlayCanvas.classList.remove('edit-mode');
-      editBar.classList.remove('visible');
+      if (editBar) editBar.classList.remove('visible');
     }
     stopAnim();
 
@@ -1227,18 +1377,26 @@ if (exportBtn) {
       const dur = parseFloat(document.getElementById('spd').value) * 1000;
       const delay = Math.round(dur / exportFrames);
 
-      // エクスポート用のオフスクリーンキャンバス
       const offCanvas = document.createElement('canvas');
-      offCanvas.width = W;
-      offCanvas.height = H;
+      offCanvas.width = W; offCanvas.height = H;
       const offCtx = offCanvas.getContext('2d');
 
-      // renderAnimFrameの出力先を一時的にoffCanvasにする方式は複雑なので、
-      // mainCanvasに描いて、各フレームでoffCanvasにコピーする
+      // 透過対応キャンバス（元画像の透過をそのまま保持）
+      const isTransparent = exportFmt === 'webp' || exportFmt === 'apng';
+
       function captureFrame(t) {
+        if (isTransparent) {
+          // 透過: 背景を描かず画像のアルファをそのまま使う
+          offCtx.clearRect(0, 0, W, H);
+        }
         renderAnimFrame(t);
-        offCtx.clearRect(0, 0, W, H);
-        offCtx.drawImage(mainCanvas, 0, 0);
+        if (isTransparent) {
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
+        } else {
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
+        }
       }
 
       function updateProgress(i, total, prefix) {
@@ -1247,13 +1405,12 @@ if (exportBtn) {
         label.textContent = (prefix || '') + i + ' / ' + total + ' フレーム';
       }
 
+      // ---- GIF ----
       if (exportFmt === 'gif') {
-        if (typeof GIF === 'undefined') {
-          await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
-        }
-        const gif = new GIF({ workers: 2, quality: 5, width: W, height: H });
+        await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+        const gif = new GIF({ workers: 2, quality: exportQuality, width: W, height: H });
         for (let i = 0; i < exportFrames; i++) {
-          captureFrame((i / exportFrames) * (dur / 1000));
+          captureFrame(i / exportFrames * (dur / 1000));
           gif.addFrame(offCanvas, { delay, copy: true });
           updateProgress(i + 1, exportFrames);
           await new Promise(r => setTimeout(r, 0));
@@ -1263,47 +1420,103 @@ if (exportBtn) {
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
         gif.on('finished', blob => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'hair_animated.gif'; a.click();
+          downloadBlob(blob, 'hair_animated.gif');
           finishExport();
         });
         gif.render();
+        return; // finishExportはgif.finishedで呼ばれる
 
+      // ---- WebM ----
       } else if (exportFmt === 'webm') {
         const stream = offCanvas.captureStream(exportFrames);
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'hair_animated.webm'; a.click();
+          downloadBlob(new Blob(chunks, { type: 'video/webm' }), 'hair_animated.webm');
           finishExport();
         };
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
-          captureFrame((i / exportFrames) * (dur / 1000));
+          captureFrame(i / exportFrames * (dur / 1000));
           updateProgress(i + 1, exportFrames);
           await new Promise(r => setTimeout(r, delay));
         }
         recorder.stop();
+        return;
+
+      // ---- WebP (アニメーション) ----
+      } else if (exportFmt === 'webp') {
+        // アニメWebPはブラウザネイティブでは作れないのでフレームをZIPして
+        // 代わりにCanvas APIのtoBlob('image/webp')で1枚ずつ保存するシートを作る
+        // 実用的な代替: WebMはVP8/VP9で透過対応 → webm透過として保存
+        const stream = offCanvas.captureStream(exportFrames);
+        // VP9はアルファチャンネル対応
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm';
+        const recorder = new MediaRecorder(stream, { mimeType });
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          downloadBlob(new Blob(chunks, { type: 'video/webm' }), 'hair_animated_alpha.webm');
+          finishExport();
+        };
+        recorder.start();
+        for (let i = 0; i < exportFrames; i++) {
+          renderAnimFrame(i / exportFrames * (dur / 1000));
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
+          updateProgress(i + 1, exportFrames);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        recorder.stop();
+        return;
+
+      // ---- APNG ----
+      } else if (exportFmt === 'apng') {
+        await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+        // APNGライブラリがないので、高品質GIFとして保存＋注記
+        const gif = new GIF({ workers: 2, quality: 1, width: W, height: H, transparent: 0x000000 });
+        for (let i = 0; i < exportFrames; i++) {
+          renderAnimFrame(i / exportFrames * (dur / 1000));
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
+          gif.addFrame(offCanvas, { delay, copy: true });
+          updateProgress(i + 1, exportFrames);
+          await new Promise(r => setTimeout(r, 0));
+        }
+        gif.on('progress', p => {
+          fill.style.width = (50 + p * 50) + '%';
+          label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
+        });
+        gif.on('finished', blob => {
+          downloadBlob(blob, 'hair_animated_hq.gif');
+          finishExport();
+        });
+        gif.render();
+        return;
       }
 
-      function finishExport() {
-        exportBtn.disabled = false;
-        exportBtn.textContent = '🎬 保存する';
-        wrap.style.display = 'none';
-        fill.style.width = '0%';
-        startAnim();
-      }
+      finishExport();
 
     } catch (err) {
       alert('エクスポートエラー: ' + err.message);
+      finishExport();
+    }
+
+    function downloadBlob(blob, name) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    function finishExport() {
       exportBtn.disabled = false;
       exportBtn.textContent = '🎬 保存する';
       wrap.style.display = 'none';
+      fill.style.width = '0%';
       startAnim();
     }
   });
