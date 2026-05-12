@@ -273,6 +273,8 @@ input[type=range]::-webkit-slider-thumb {
 .anim-chip.active { background: rgba(167,139,250,0.1); border-color: var(--accent); color: var(--accent); }
 .anim-chip .ic { font-size: 15px; display: block; margin-bottom: 3px; }
 
+.hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
+
 /* edit mode */
 #overlay-canvas.edit-mode { pointer-events: all; cursor: crosshair; }
 #overlay-canvas.edit-mode.dragging { cursor: grabbing; }
@@ -362,7 +364,7 @@ input[type=range]::-webkit-slider-thumb {
       </div>
       <div id="canvas-zoom-wrap">
         <canvas id="main-canvas" style="display:none"></canvas>
-        <canvas id="overlay-canvas" style="display:none"></canvas>
+        <canvas id="overlay-canvas" style="display:none; pointer-events:all;"></canvas>
       </div>
       <div id="zoom-controls">
         <button class="zoom-btn" id="zoom-in-btn">＋</button>
@@ -449,6 +451,11 @@ input[type=range]::-webkit-slider-thumb {
       <div class="slider-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:18px; margin-bottom:0;">
         <div class="slider-label" style="margin-bottom:0;">背景の自動補完 <span style="font-size:10px;color:var(--muted);font-weight:normal">(β版)</span></div>
         <button id="inpaint-toggle-btn" class="seg-btn" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 10px;cursor:pointer;transition:all 0.2s;">OFF</button>
+      </div>
+
+      <div class="slider-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; margin-bottom:0;">
+        <div class="slider-label" style="margin-bottom:0;">マウス/指で触って揺らす</div>
+        <button id="interact-toggle-btn" class="seg-btn active" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 10px;cursor:pointer;transition:all 0.2s;">ON</button>
       </div>
 
     </div>
