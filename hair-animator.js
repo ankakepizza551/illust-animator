@@ -428,17 +428,6 @@ function renderAnimFrame(t) {
     const regionDiag = Math.hypot(maxX - minX, maxY - minY);
     const influenceScale = regionDiag > 0 ? regionDiag * 0.6 : 100;
 
-    // Get bounding box of polygon
-    const xs = region.polygon.map(([x]) => x * W);
-    const ys = region.polygon.map(([, y]) => y * H);
-    const minX = Math.max(0, Math.floor(Math.min(...xs)) - 2);
-    const maxX = Math.min(W, Math.ceil(Math.max(...xs)) + 2);
-    const minY = Math.max(0, Math.floor(Math.min(...ys)) - 2);
-    const maxY = Math.min(H, Math.ceil(Math.max(...ys)) + 2);
-
-    const anchorX = (region.anchor?.[0] ?? 0.5) * W;
-    const anchorY = (region.anchor?.[1] ?? 0) * H;
-
     // Extract region pixels from original
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
