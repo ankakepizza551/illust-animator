@@ -1,5 +1,6 @@
 // hair-animator.js
 
+// エラーハンドリングは一時的にコメントアウト
 // window.onerror = (msg, src, line) => {
 //  document.body.insertAdjacentHTML('afterbegin',
 //     `<div style="background:red;color:white;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">JS Error 行${line}: ${msg}</div>`
@@ -73,6 +74,7 @@ function loadImage(file) {
     mainCanvas.style.display = 'block';
     overlayCanvas.style.display = 'block';
 
+    // canvasが表示されてからcontextを取得
     if (!mCtx) mCtx = mainCanvas.getContext('2d');
     if (!oCtx) oCtx = overlayCanvas.getContext('2d');
     overlayCanvas.style.width  = mainCanvas.width + 'px';
@@ -150,7 +152,9 @@ detectBtn.addEventListener('click', async () => {
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -158,13 +162,17 @@ detectBtn.addEventListener('click', async () => {
             { inline_data: { mime_type: mimeType, data: base64 } }
           ]
         }],
-        generationConfig: { responseMimeType: "application/json" }
+        generationConfig: {
+          responseMimeType: "application/json",
+        }
       })
     });
 
     const data = await response.json();
     
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
     
     const raw = data.candidates[0].content.parts[0].text || '';
     const jsonStr = raw.replace(/```json|```/g, '').trim();
@@ -226,11 +234,48 @@ function renderRegionList() {
   detectedRegions.forEach((region, i) => {
     const item = document.createElement('div');
     item.className = 'region-item' + (region.enabled ? ' active' : '');
+
+    // 🌟 ▲▼ボタンで順番を入れ替える機能を追加
     item.innerHTML = `
       <div class="region-color" style="background:${region.color}"></div>
-      <div class="region-label">${region.label}<div style="font-size:10px;color:var(--muted);margin-top:2px">${region.description||''}</div></div>
+      <div class="region-label" style="flex:1;">
+        ${region.label}
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${region.description||''}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2px; margin-right:8px; align-items:center;">
+        <button class="layer-up" style="background:none; border:none; color:${i === 0 ? 'transparent' : 'var(--muted)'}; cursor:${i === 0 ? 'default' : 'pointer'}; font-size:10px; padding:2px;" title="順序を奥へ">▲</button>
+        <button class="layer-down" style="background:none; border:none; color:${i === detectedRegions.length - 1 ? 'transparent' : 'var(--muted)'}; cursor:${i === detectedRegions.length - 1 ? 'default' : 'pointer'}; font-size:10px; padding:2px;" title="順序を手前へ">▼</button>
+      </div>
       <div class="region-toggle ${region.enabled ? 'on' : ''}" data-idx="${i}"></div>
     `;
+
+    // ボタンクリック時の入れ替え処理
+    const upBtn = item.querySelector('.layer-up');
+    const downBtn = item.querySelector('.layer-down');
+    
+    if (i > 0) {
+      upBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        [detectedRegions[i - 1], detectedRegions[i]] = [detectedRegions[i], detectedRegions[i - 1]];
+        if (editingRegionIdx === i) editingRegionIdx = i - 1;
+        else if (editingRegionIdx === i - 1) editingRegionIdx = i;
+        saveUndoState();
+        renderRegionList();
+        if(editMode) drawEditOverlay(); else drawOverlay();
+      });
+    }
+    if (i < detectedRegions.length - 1) {
+      downBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        [detectedRegions[i + 1], detectedRegions[i]] = [detectedRegions[i], detectedRegions[i + 1]];
+        if (editingRegionIdx === i) editingRegionIdx = i + 1;
+        else if (editingRegionIdx === i + 1) editingRegionIdx = i;
+        saveUndoState();
+        renderRegionList();
+        if(editMode) drawEditOverlay(); else drawOverlay();
+      });
+    }
+
     item.querySelector('.region-toggle').addEventListener('click', (e) => {
       e.stopPropagation();
       detectedRegions[i].enabled = !detectedRegions[i].enabled;
@@ -513,7 +558,7 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 });
 
 // ============================================================
-// 頂点編集モード（ポリゴンの頂点を直接動かす） & 移動・ズーム
+// 頂点編集モード（ポリゴンの頂点を直接動かす）＆ パン・ズーム対応
 // ============================================================
 let editMode = false;
 let editingRegionIdx = -1;
@@ -528,7 +573,6 @@ let isPanning = false;
 let panToolActive = false;
 let panStartX = 0, panStartY = 0;
 let panStartPanX = 0, panStartPanY = 0;
-let panX = 0, panY = 0; // グローバルに移動量を保持
 
 const editBtn     = document.getElementById('edit-btn');
 const editBar     = document.getElementById('edit-bar');
@@ -572,7 +616,7 @@ if (panBtn) {
     panToolActive = !panToolActive;
     panBtn.classList.toggle('active', panToolActive);
     overlayCanvas.style.cursor = panToolActive ? 'grab' : 'crosshair';
-    if (panToolActive) addingRegionMode = false; // 排他処理
+    if (panToolActive) addingRegionMode = false;
   });
 }
 
@@ -638,7 +682,6 @@ function drawEditOverlay() {
 function getEventPos(e) {
   const rect = overlayCanvas.getBoundingClientRect();
   const touch = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
-  // CSSによる拡大・移動を逆算して、キャンバス内の真のピクセル座標を割り出す
   const scaleX = overlayCanvas.width / rect.width;
   const scaleY = overlayCanvas.height / rect.height;
   return {
@@ -697,10 +740,9 @@ function findRegionContaining(pt) {
 
 function onEditStart(e) {
   if (!editMode) return;
-  if (e.touches && e.touches.length >= 2) return; // ピンチ時は無視
+  if (e.touches && e.touches.length >= 2) return; 
 
   // ===== 移動（パン）判定 =====
-  // スペースキー押下、中クリック、または移動ツールON時
   if (isSpaceDown || e.button === 1 || panToolActive) {
     e.preventDefault();
     isPanning = true;
@@ -890,6 +932,7 @@ function drawAddingOverlay() {
 // PINCH ZOOM & PAN (ズームとパン)
 // ============================================================
 let zoomScale = 1;
+let panX = 0, panY = 0;
 let pinchStartDist = 0;
 let pinchStartScale = 1;
 let pinchStartPanX = 0, pinchStartPanY = 0;
@@ -899,7 +942,6 @@ const zoomWrap = document.getElementById('canvas-zoom-wrap');
 
 function applyZoom() {
   if (!zoomWrap) return;
-  // CSSのtranslateで移動、scaleで拡大を同時に適用
   zoomWrap.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
   const zBtn = document.getElementById('zoom-reset-btn');
   if (zBtn) zBtn.textContent = Math.round(zoomScale * 100) + '%';
@@ -914,7 +956,6 @@ document.getElementById('zoom-in-btn')?.addEventListener('click', () => { zoomSc
 document.getElementById('zoom-out-btn')?.addEventListener('click', () => { zoomScale = Math.max(MIN_ZOOM, zoomScale / 1.4); applyZoom(); });
 document.getElementById('zoom-reset-btn')?.addEventListener('click', resetZoom);
 
-// スマホの2本指で「ズーム＆スクロール」を同時に処理
 canvasBox.addEventListener('touchstart', e => {
   if (!editMode || e.touches.length !== 2) return;
   const t1 = e.touches[0], t2 = e.touches[1];
@@ -951,7 +992,7 @@ if (redetectBtn) {
 }
 
 // ============================================================
-// EXPORT (GIF / WebM / WebP / APNG)
+// EXPORT (GIF / WebM)
 // ============================================================
 let exportFmt = 'gif';
 let exportFrames = 20;
@@ -1023,7 +1064,9 @@ if (exportBtn) {
       const isTransparent = exportFmt === 'webp' || exportFmt === 'apng';
 
       function captureFrame(t) {
-        if (isTransparent) { offCtx.clearRect(0, 0, W, H); }
+        if (isTransparent) {
+          offCtx.clearRect(0, 0, W, H);
+        }
         renderAnimFrame(t);
         if (isTransparent) {
           offCtx.clearRect(0, 0, W, H);
@@ -1053,9 +1096,13 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { downloadBlob(blob, 'hair_animated.gif'); finishExport(); });
+        gif.on('finished', blob => {
+          downloadBlob(blob, 'hair_animated.gif');
+          finishExport();
+        });
         gif.render();
         return;
+
       } else if (exportFmt === 'webm') {
         const stream = offCanvas.captureStream(exportFrames);
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
@@ -1073,9 +1120,12 @@ if (exportBtn) {
         }
         recorder.stop();
         return;
+
       } else if (exportFmt === 'webp') {
         const stream = offCanvas.captureStream(exportFrames);
-        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm';
         const recorder = new MediaRecorder(stream, { mimeType });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
@@ -1086,18 +1136,21 @@ if (exportBtn) {
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
-          offCtx.clearRect(0, 0, W, H); offCtx.drawImage(mainCanvas, 0, 0);
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
           updateProgress(i + 1, exportFrames);
           await new Promise(r => setTimeout(r, delay));
         }
         recorder.stop();
         return;
+
       } else if (exportFmt === 'apng') {
         await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
         const gif = new GIF({ workers: 2, quality: 1, width: W, height: H, transparent: 0x000000 });
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
-          offCtx.clearRect(0, 0, W, H); offCtx.drawImage(mainCanvas, 0, 0);
+          offCtx.clearRect(0, 0, W, H);
+          offCtx.drawImage(mainCanvas, 0, 0);
           gif.addFrame(offCanvas, { delay, copy: true });
           updateProgress(i + 1, exportFrames);
           await new Promise(r => setTimeout(r, 0));
@@ -1106,7 +1159,10 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { downloadBlob(blob, 'hair_animated_hq.gif'); finishExport(); });
+        gif.on('finished', blob => {
+          downloadBlob(blob, 'hair_animated_hq.gif');
+          finishExport();
+        });
         gif.render();
         return;
       }
