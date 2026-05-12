@@ -434,6 +434,12 @@ input[type=range]::-webkit-slider-thumb {
       <div class="panel-title">検出された部位</div>
       <div class="region-list" id="region-list"></div>
       <button class="btn-edit active" id="edit-btn" style="width:100%;margin-top:12px;padding:9px">✏️ ポリゴンを手動調整</button>
+
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn-secondary" id="save-project-btn" style="margin-top:0; flex:1;" title="現在のポリゴン情報をPCに保存します">💾 データ保存</button>
+        <button class="btn-secondary" id="load-project-btn" style="margin-top:0; flex:1;" title="保存したポリゴン情報を読み込みます">📂 データ読込</button>
+        <input type="file" id="project-file-input" accept=".json" style="display:none">
+      </div>
     </div>
 
     <div class="panel" id="anim-panel" style="display:none">
