@@ -431,6 +431,13 @@ input[type=range]::-webkit-slider-thumb {
 <div id="dropzone">
 
 <script>
+  window.onerror = function(msg, src, line) {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:red;color:white;padding:20px;font-size:14px;position:fixed;top:0;left:0;right:0;z-index:9999">
+      エラー: ${msg}<br>行: ${line}
+    </div>`
+  );
+};
 // ============================================================
 // STATE
 // ============================================================
