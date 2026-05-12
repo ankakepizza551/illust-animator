@@ -1,10 +1,10 @@
 // hair-animator.js
 
-window.onerror = (msg, src, line) => {
-  document.body.insertAdjacentHTML('afterbegin',
-    `<div style="background:red;color:white;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">JS Error 行${line}: ${msg}</div>`
-  );
-};
+//window.onerror = (msg, src, line) => {
+// document.body.insertAdjacentHTML('afterbegin',
+//    `<div style="background:red;color:white;padding:12px;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:9999;word-break:break-all">JS Error 行${line}: ${msg}</div>`
+//  );
+//};
 
 // ============================================================
 // STATE
