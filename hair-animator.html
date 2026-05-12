@@ -251,8 +251,13 @@ input[type=range]::-webkit-slider-thumb {
   border-radius: 8px;
 }
 
-#file-input { display: none; }
-.canvas-box.dragover { border-color: var(--accent); }
+#file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}.canvas-box.dragover { border-color: var(--accent); }
 
 /* anim type */
 .anim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
