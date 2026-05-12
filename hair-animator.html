@@ -451,8 +451,6 @@ const dropzone    = document.getElementById('dropzone');
 const canvasBox   = document.getElementById('canvas-box');
 const mainCanvas  = document.getElementById('main-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
-const mCtx        = mainCanvas.getContext('2d');
-const oCtx        = overlayCanvas.getContext('2d');
 const fileInput   = document.getElementById('file-input');
 const detectBtn   = document.getElementById('detect-btn');
 const regionsPanel= document.getElementById('regions-panel');
@@ -476,7 +474,14 @@ canvasBox.addEventListener('drop', e => {
   if (f && f.type.startsWith('image/')) loadImage(f);
 });
 
+// 変更前（トップレベルで即実行）
+mCtx, oCtx;
+
+// loadImage関数の中で初期化
 function loadImage(file) {
+  // ↓ここで初めて取得
+  if (!mCtx) mCtx = mainCanvas.getContext('2d');
+  if (!oCtx) oCtx = overlayCanvas.getContext('2d');
   imageFile = file;
   const url = URL.createObjectURL(file);
   imageEl = new Image();
