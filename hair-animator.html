@@ -252,7 +252,13 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 #file-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
 }.canvas-box.dragover { border-color: var(--accent); }
 
 /* anim type */
