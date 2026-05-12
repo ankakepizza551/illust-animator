@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>illust.animator - ポータル</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #252535;
+    --accent: #a78bfa;
+    --accent-hover: #c4b5fd;
+    --accent2: #f472b6;
+    --accent3: #7eb8f7;
+    --text: #e2e0ff;
+    --text-muted: #8b89a8;
+    --muted: #5a5880;
+    --glow: rgba(167, 139, 250, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Background Effects */
+  .bg-effects {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .bg-glow-1 {
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 50vw;
+    height: 50vw;
+    background: radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%);
+    filter: blur(80px);
+    animation: drift 15s ease-in-out infinite alternate;
+  }
+  .bg-glow-2 {
+    position: absolute;
+    bottom: -20%;
+    right: -10%;
+    width: 60vw;
+    height: 60vw;
+    background: radial-gradient(circle, rgba(126,184,247,0.12) 0%, transparent 70%);
+    filter: blur(100px);
+    animation: drift 20s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(5%, 10%) scale(1.1); }
+  }
+
+  /* Header / Hero */
+  .hero {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    margin-bottom: 64px;
+    padding-top: 40px;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 50%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+    display: inline-block;
+  }
+  .logo span {
+    font-family: 'Space Mono', monospace;
+    font-size: 52px;
+  }
+  .subtitle {
+    font-size: 16px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    font-weight: 300;
+  }
+
+  /* Cards Container */
+  .cards-container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    gap: 32px;
+    max-width: 1000px;
+    width: 100%;
+    padding: 0 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* Card */
+  .card {
+    background: rgba(18, 18, 26, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 420px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.06), transparent 40%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(167, 139, 250, 0.5);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(167, 139, 250, 0.2) inset;
+  }
+  .card:hover::before {
+    opacity: 1;
+  }
+  
+  .card-icon-wrap {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  
+  .card.animator .card-icon-wrap {
+    background: rgba(126, 184, 247, 0.15);
+    border: 1px solid rgba(126, 184, 247, 0.3);
+    color: var(--accent3);
+  }
+  .card.hair .card-icon-wrap {
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    color: var(--accent);
+  }
+
+  .card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .card.animator .card-title { color: var(--accent3); }
+  .card.hair .card-title { color: var(--accent); }
+
+  .badge {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+  .card.hair .badge {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+
+  .card-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    margin-bottom: 32px;
+    flex-grow: 1;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+  .card:hover .card-footer {
+    color: var(--text);
+  }
+  .card.animator:hover .card-footer { color: var(--accent3); }
+  .card.hair:hover .card-footer { color: var(--accent); }
+
+  .arrow-icon {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .card:hover .arrow-icon {
+    transform: translateX(8px);
+  }
+
+  /* Decorative Elements */
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  }
+
+  @media (max-width: 768px) {
+    .cards-container { flex-direction: column; align-items: center; }
+    .card { max-width: 100%; }
+    .logo { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="grid-bg"></div>
+  <div class="bg-effects">
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+  </div>
+
+  <div class="hero">
+    <div class="logo">illust<span>.</span>animator</div>
+    <div class="subtitle">1枚のイラストに、命を吹き込む</div>
+  </div>
+
+  <div class="cards-container" id="cards">
+    <!-- Tool 1: Whole Image Animator -->
+    <a href="animator.html" class="card animator">
+      <div class="card-icon-wrap">
+        ✨
+      </div>
+      <div class="card-title">
+        Basic Animator
+      </div>
+      <div class="card-desc">
+        CSSアニメーションを用いて、イラスト全体を「ふわふわ」させたり「呼吸」させたりする軽量ツール。パーティクルやグロー効果でリッチな演出を手軽に作成できます。
+      </div>
+      <div class="card-footer">
+        <span>Launch Tool</span>
+        <span class="arrow-icon">→</span>
+      </div>
+    </a>
+
+    <!-- Tool 2: Hair/Body Part Animator -->
+    <a href="hair-animator.html" class="card hair">
+      <div class="card-icon-wrap">
+        🪄
+      </div>
+      <div class="card-title">
+        AI Part Animator
+        <span class="badge">Gemini AI</span>
+      </div>
+      <div class="card-desc">
+        AI（Gemini API）がイラストの「髪の毛」や「リボン」などの部位を自動検出し、部分的に揺らしたりなびかせたりできる高度なアニメーションツール。インタラクティブに触って揺らすことも可能です。
+      </div>
+      <div class="card-footer">
+        <span>Launch Tool</span>
+        <span class="arrow-icon">→</span>
+      </div>
+    </a>
+  </div>
+
+<script>
+  // Hover effect for cards to update CSS custom properties for mouse tracking
+  const cards = document.querySelectorAll('.card');
+  
+  cards.forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      card.style.setProperty('--mouse-x', `${x}px`);
+      card.style.setProperty('--mouse-y', `${y}px`);
+    });
+  });
+</script>
+</body>
+</html>
