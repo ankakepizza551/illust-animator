@@ -11,7 +11,6 @@ let animType = 'sway';
 let rafId = null;
 let startTime = null;
 
-// 🌟 背景補完用のキャンバス・フラグ
 let originalCanvas = null; 
 let inpaintBaseCanvas = null; 
 let useInpaint = false;
@@ -78,7 +77,6 @@ function loadImage(file) {
     overlayCanvas.style.left   = mainCanvas.offsetLeft + 'px';
     overlayCanvas.style.top    = mainCanvas.offsetTop + 'px';
 
-    // 🌟 原本のピクセルデータを別キャンバスに保持（背景や前景の切り抜きに使用）
     originalCanvas = document.createElement('canvas');
     originalCanvas.width = mainCanvas.width;
     originalCanvas.height = mainCanvas.height;
@@ -192,6 +190,7 @@ detectBtn.addEventListener('click', async () => {
       animType: null,
       animSpd: null,
       animAmp: null,
+      pins: [] // 🌟 ピン情報を初期化
     }));
 
     renderRegionList();
@@ -258,7 +257,7 @@ function renderRegionList() {
         else if (editingRegionIdx === i - 1) editingRegionIdx = i;
         saveUndoState();
         renderRegionList();
-        cacheInpaintedBackgrounds(); // 順序が変わったので背景も再計算
+        cacheInpaintedBackgrounds();
         if(editMode) drawEditOverlay(); else drawOverlay();
       });
     }
@@ -357,7 +356,7 @@ function renderRegionList() {
 }
 
 // ============================================================
-// BACKGROUND INPAINTING (背景の自動補完) 🌟 新機能 🌟
+// BACKGROUND INPAINTING
 // ============================================================
 function cacheInpaintedBackgrounds() {
   if (!imageLoaded || !originalCanvas) return;
@@ -369,16 +368,13 @@ function cacheInpaintedBackgrounds() {
   inpaintBaseCanvas.width = W; 
   inpaintBaseCanvas.height = H;
   const bgCtx = inpaintBaseCanvas.getContext('2d', { willReadFrequently: true });
-  // ベース画像をコピー
   bgCtx.drawImage(originalCanvas, 0, 0);
 
-  // OFFならここで終了（オリジナルのまま）
   if (!useInpaint) return;
 
   detectedRegions.forEach(region => {
     if (!region.enabled || !region.polygon || region.polygon.length < 3) return;
 
-    // バウンディングボックスの計算
     const xs = region.polygon.map(([x]) => x * W);
     const ys = region.polygon.map(([, y]) => y * H);
     const minX = Math.floor(Math.min(...xs));
@@ -389,8 +385,7 @@ function cacheInpaintedBackgrounds() {
 
     if (rw <= 0 || rh <= 0) return;
 
-    // ポリゴンのマスク（白塗り）を作る
-    const pad = 24; // 補完処理用に周囲を多めに取る
+    const pad = 24; 
     const sx = Math.max(0, minX - pad), sy = Math.max(0, minY - pad);
     const sw = Math.min(W - sx, rw + pad * 2), sh = Math.min(H - sy, rh + pad * 2);
     if (sw <= 0 || sh <= 0) return;
@@ -410,21 +405,17 @@ function cacheInpaintedBackgrounds() {
     const patch = document.createElement('canvas');
     patch.width = sw; patch.height = sh;
     const pCtx = patch.getContext('2d');
-    // オリジナル画像を切り出す
     pCtx.drawImage(originalCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-    // 穴を開ける (destination-out)
     pCtx.globalCompositeOperation = 'destination-out';
     pCtx.drawImage(mask, 0, 0);
 
-    // 穴の周囲のピクセルを内側ににじませる (destination-overで裏側に描画)
     pCtx.globalCompositeOperation = 'destination-over';
     let pass = document.createElement('canvas');
     pass.width = sw; pass.height = sh;
     let passCtx = pass.getContext('2d', {willReadFrequently: true});
     passCtx.drawImage(patch, 0, 0);
 
-    // 8回ループしてにじみを広げる
     for(let i = 0; i < 8; i++) {
        const temp = document.createElement('canvas');
        temp.width = sw; temp.height = sh;
@@ -432,7 +423,6 @@ function cacheInpaintedBackgrounds() {
        tCtx.drawImage(pass, 0, 0);
        
        passCtx.clearRect(0,0,sw,sh);
-       // 上下斜めにピクセルをずらして重ねる
        const offsets = [[2,0],[-2,0],[0,2],[0,-2], [2,2],[-2,-2],[2,-2],[-2,2]];
        passCtx.globalAlpha = 0.7; 
        offsets.forEach(([dx,dy]) => {
@@ -441,7 +431,6 @@ function cacheInpaintedBackgrounds() {
        passCtx.globalAlpha = 1.0;
     }
 
-    // にじませた画像を、元の背景の「ポリゴンの内側」だけに合成する
     bgCtx.save();
     bgCtx.beginPath();
     region.polygon.forEach(([px, py], idx) => {
@@ -451,14 +440,12 @@ function cacheInpaintedBackgrounds() {
     bgCtx.closePath();
     bgCtx.clip();
     
-    // 境界が不自然にならないように少しぼかしを入れる
     bgCtx.filter = 'blur(6px)';
     bgCtx.drawImage(pass, sx, sy);
     bgCtx.restore();
   });
 }
 
-// INPAINT TOGGLE BUTTON
 const inpaintToggleBtn = document.getElementById('inpaint-toggle-btn');
 if (inpaintToggleBtn) {
   inpaintToggleBtn.addEventListener('click', () => {
@@ -474,7 +461,7 @@ if (inpaintToggleBtn) {
       inpaintToggleBtn.style.color = 'var(--muted)';
       inpaintToggleBtn.style.borderColor = 'var(--border)';
     }
-    cacheInpaintedBackgrounds(); // スイッチ切り替えで即座に再計算
+    cacheInpaintedBackgrounds();
   });
 }
 
@@ -518,7 +505,7 @@ function drawOverlay(t = 0) {
 // ============================================================
 function startAnim() {
   stopAnim();
-  cacheInpaintedBackgrounds(); // 🌟 アニメ開始前に背景の穴埋めを計算しておく
+  cacheInpaintedBackgrounds(); 
   startTime = performance.now();
   rafId = requestAnimationFrame(animLoop);
 }
@@ -541,7 +528,6 @@ function renderAnimFrame(t) {
 
   mCtx.clearRect(0, 0, W, H);
   
-  // 🌟 ベース画像を、補完済み背景（あれば）に切り替える
   if (inpaintBaseCanvas) {
     mCtx.drawImage(inpaintBaseCanvas, 0, 0);
   } else if (originalCanvas) {
@@ -570,9 +556,13 @@ function renderAnimFrame(t) {
 
     const anchorX = (region.anchor?.[0] ?? 0.5) * W;
     const anchorY = (region.anchor?.[1] ?? 0) * H;
+    const pins = region.pins || [];
 
     const regionDiag = Math.hypot(maxX - minX, maxY - minY);
     const influenceScale = regionDiag > 0 ? regionDiag * 0.6 : 100;
+    
+    // 🌟 ピンの影響半径（部位の大きさに応じて自動調整）
+    const pinRadius = Math.max(50, regionDiag * 0.4); 
 
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
@@ -593,7 +583,6 @@ function renderAnimFrame(t) {
     maskCtx.fill();
     const maskData = maskCtx.getImageData(0, 0, regionW, regionH).data;
 
-    // 🌟 アニメーションさせる「髪そのもの」のピクセルは、常に originalCanvas (原画) から取得する
     const tmp = document.createElement('canvas');
     tmp.width = regionW; tmp.height = regionH;
     const tCtx = tmp.getContext('2d', { willReadFrequently: true });
@@ -620,7 +609,23 @@ function renderAnimFrame(t) {
         const worldX = minX + px;
         const worldY = minY + py;
         const distFromAnchor = Math.sqrt((worldX - anchorX) ** 2 + (worldY - anchorY) ** 2);
-        const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp;
+        
+        // 🌟 固定ピンによる影響度の減衰計算
+        let pinAttenuation = 1.0;
+        if (pins.length > 0) {
+          let minDist = Infinity;
+          for (let i = 0; i < pins.length; i++) {
+            const ppx = pins[i][0] * W;
+            const ppy = pins[i][1] * H;
+            const d = Math.sqrt((worldX - ppx) ** 2 + (worldY - ppy) ** 2);
+            if (d < minDist) minDist = d;
+          }
+          let t_atten = Math.min(minDist / pinRadius, 1.0);
+          pinAttenuation = t_atten * t_atten * (3 - 2 * t_atten); // 滑らかな減衰
+        }
+
+        // アンカー距離に加えて、ピン付近は influence がゼロに近づく
+        const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp * pinAttenuation;
 
         let offsetX = 0, offsetY = 0;
         if (rType === 'sway') {
@@ -693,7 +698,7 @@ document.querySelectorAll('.anim-chip').forEach(chip => {
 });
 
 // ============================================================
-// 頂点編集モード（ポリゴンの頂点を直接動かす）＆ パン・ズーム対応
+// 頂点編集モード（ポリゴンの頂点を直接動かす）＆ パン・ズーム・ピン対応
 // ============================================================
 let editMode = false;
 let editingRegionIdx = -1;
@@ -702,28 +707,45 @@ let draggingAnchor = false;
 let lastTapTime = 0;
 let lastTapVertexIdx = -1;
 
+let addingRegionMode = false;
 let isSpaceDown = false;
 let isPanning = false;
 let panToolActive = false;
+let pinToolActive = false;
 let panStartX = 0, panStartY = 0;
 let panStartPanX = 0, panStartPanY = 0;
+let newRegionPoints = [];
 
-const editBtn     = document.getElementById('edit-btn');
-const editBar     = document.getElementById('edit-bar');
-const editDoneBtn = document.getElementById('edit-done-btn');
-const panBtn      = document.getElementById('pan-btn');
+const editBtn        = document.getElementById('edit-btn');
+const editBar        = document.getElementById('edit-bar');
+const editDoneBtn    = document.getElementById('edit-done-btn');
+const panBtn         = document.getElementById('pan-btn');
+const pinBtn         = document.getElementById('pin-btn');
+const addRegionBtn   = document.getElementById('add-region-btn');
+
+// ツール切り替えの一括リセット用
+function deactivateAllTools() {
+  addingRegionMode = false;
+  if (addRegionBtn) { addRegionBtn.style.background = ''; addRegionBtn.style.borderColor = ''; addRegionBtn.style.color = ''; }
+  panToolActive = false;
+  if (panBtn) panBtn.classList.remove('active');
+  pinToolActive = false;
+  if (pinBtn) pinBtn.classList.remove('active');
+  
+  const tip = document.getElementById('edit-tip-text');
+  if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除 / ⚓ドラッグでアンカー移動';
+  overlayCanvas.style.cursor = 'crosshair';
+}
 
 if (editBtn && editBar && editDoneBtn) {
   editBtn.addEventListener('click', () => {
     if (detectedRegions.length === 0) return;
-    editMode = true; addingRegionMode = false; panToolActive = false;
-    if (panBtn) panBtn.classList.remove('active');
+    editMode = true;
+    deactivateAllTools();
     editingRegionIdx = detectedRegions.findIndex(r => r.enabled);
     if (editingRegionIdx < 0) editingRegionIdx = 0;
     overlayCanvas.classList.add('edit-mode');
     editBar.classList.add('visible');
-    const tip = document.getElementById('edit-tip-text');
-    if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除 / ⚓ドラッグでアンカー移動';
     stopAnim();
     saveUndoState();
     drawEditOverlay();
@@ -732,8 +754,8 @@ if (editBtn && editBar && editDoneBtn) {
   });
 
   editDoneBtn.addEventListener('click', () => {
-    editMode = false; addingRegionMode = false; panToolActive = false;
-    if (panBtn) panBtn.classList.remove('active');
+    editMode = false; 
+    deactivateAllTools();
     editingRegionIdx = -1; draggingVertexIdx = -1; draggingAnchor = false; isPanning = false;
     overlayCanvas.classList.remove('edit-mode');
     editBar.classList.remove('visible');
@@ -741,16 +763,49 @@ if (editBtn && editBar && editDoneBtn) {
     const zc = document.getElementById('zoom-controls');
     if (zc) zc.classList.remove('visible');
     drawOverlay();
-    startAnim(); // ここで自動的に背景補完も再計算されます
+    startAnim();
+  });
+}
+
+if (addRegionBtn) {
+  addRegionBtn.addEventListener('click', () => {
+    const wasActive = addingRegionMode;
+    deactivateAllTools();
+    newRegionPoints = [];
+    if (!wasActive) {
+      addingRegionMode = true;
+      addRegionBtn.style.background = 'rgba(167,139,250,0.2)'; addRegionBtn.style.borderColor = 'var(--accent)'; addRegionBtn.style.color = 'var(--accent)';
+      const tip = document.getElementById('edit-tip-text');
+      if (tip) tip.innerHTML = '<b>部位追加：</b>タップで頂点を打つ（3点以上）→ 最初の点をタップで確定';
+      drawEditOverlay();
+    } else {
+      drawEditOverlay();
+    }
   });
 }
 
 if (panBtn) {
   panBtn.addEventListener('click', () => {
-    panToolActive = !panToolActive;
-    panBtn.classList.toggle('active', panToolActive);
-    overlayCanvas.style.cursor = panToolActive ? 'grab' : 'crosshair';
-    if (panToolActive) addingRegionMode = false;
+    const wasActive = panToolActive;
+    deactivateAllTools();
+    if (!wasActive) {
+      panToolActive = true;
+      panBtn.classList.add('active');
+      overlayCanvas.style.cursor = 'grab';
+    }
+  });
+}
+
+if (pinBtn) {
+  pinBtn.addEventListener('click', () => {
+    const wasActive = pinToolActive;
+    deactivateAllTools();
+    if (!wasActive) {
+      pinToolActive = true;
+      pinBtn.classList.add('active');
+      const tip = document.getElementById('edit-tip-text');
+      if (tip) tip.innerHTML = '<b>ピン固定：</b>クリックでピンを追加 / ピン付近をクリックで削除';
+    }
   });
 }
 
@@ -758,7 +813,10 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Space' && editMode) { isSpaceDown = true; overlayCanvas.style.cursor = 'grab'; e.preventDefault(); }
 });
 window.addEventListener('keyup', e => {
-  if (e.code === 'Space') { isSpaceDown = false; overlayCanvas.style.cursor = panToolActive ? 'grab' : 'crosshair'; }
+  if (e.code === 'Space') { 
+    isSpaceDown = false; 
+    overlayCanvas.style.cursor = panToolActive ? 'grab' : 'crosshair'; 
+  }
 });
 
 function drawEditOverlay() {
@@ -792,6 +850,17 @@ function drawEditOverlay() {
     oCtx.fillText(region.label || '部位' + (i+1), minX * W + 4, minY * H - 4);
 
     if (isEditing) {
+      // 🌟 固定ピンの描画
+      if (region.pins) {
+        region.pins.forEach(pin => {
+          const px = pin[0] * W, py = pin[1] * H;
+          oCtx.beginPath(); oCtx.arc(px, py, 7, 0, Math.PI * 2);
+          oCtx.fillStyle = '#3b82f6'; oCtx.fill();
+          oCtx.strokeStyle = '#fff'; oCtx.lineWidth = 2; oCtx.stroke();
+          oCtx.fillStyle = '#fff'; oCtx.font = '10px sans-serif'; oCtx.fillText('📌', px - 5, py + 3);
+        });
+      }
+
       region.polygon.forEach(([px, py]) => {
         const x = px * W, y = py * H;
         oCtx.beginPath(); oCtx.arc(x, y, 9, 0, Math.PI * 2); oCtx.fillStyle = '#fff'; oCtx.fill();
@@ -902,6 +971,30 @@ function onEditStart(e) {
   const pt = getEventPos(e);
   const W = overlayCanvas.width, H = overlayCanvas.height;
 
+  // 🌟 ピン固定ツールの処理
+  if (pinToolActive) {
+    const region = detectedRegions[editingRegionIdx];
+    if (!region.pins) region.pins = [];
+    const rx = pt.x / W, ry = pt.y / H;
+    
+    let removed = false;
+    for (let i = 0; i < region.pins.length; i++) {
+       const px = region.pins[i][0] * W, py = region.pins[i][1] * H;
+       if (Math.hypot(pt.x - px, pt.y - py) < 18) {
+         saveUndoState();
+         region.pins.splice(i, 1); // 削除
+         removed = true;
+         break;
+       }
+    }
+    if (!removed && pointInPolygon(rx, ry, region.polygon)) {
+       saveUndoState();
+       region.pins.push([rx, ry]); // 追加
+    }
+    drawEditOverlay();
+    return;
+  }
+
   if (addingRegionMode) {
     const rx = pt.x / W, ry = pt.y / H;
     if (newRegionPoints.length >= 3) {
@@ -916,13 +1009,10 @@ function onEditStart(e) {
           polygon: newRegionPoints.map(p => [...p]),
           anchor: [cx, Math.min(...ys)], color: colors[detectedRegions.length % colors.length],
           enabled: true, animOffset: Math.random() * Math.PI * 2, animType: null, animSpd: null, animAmp: null,
-          description: '手動追加',
+          description: '手動追加', pins: []
         });
         editingRegionIdx = detectedRegions.length - 1;
-        newRegionPoints = []; addingRegionMode = false;
-        if (addRegionBtn) { addRegionBtn.style.background = ''; addRegionBtn.style.borderColor = ''; addRegionBtn.style.color = ''; }
-        const tip = document.getElementById('edit-tip-text');
-        if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除';
+        deactivateAllTools();
         renderRegionList(); saveUndoState(); drawEditOverlay();
         return;
       }
@@ -1011,7 +1101,10 @@ const MAX_UNDO = 20;
 
 function saveUndoState() {
   const snapshot = detectedRegions.map(r => ({
-    ...r, polygon: r.polygon.map(p => [...p]), anchor: r.anchor ? [...r.anchor] : null,
+    ...r, 
+    polygon: r.polygon.map(p => [...p]), 
+    anchor: r.anchor ? [...r.anchor] : null,
+    pins: r.pins ? r.pins.map(p => [...p]) : [] // 🌟 ピン情報も保存
   }));
   undoStack.push(snapshot);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -1022,37 +1115,16 @@ function undo() {
   undoStack.pop();
   const prev = undoStack[undoStack.length - 1];
   detectedRegions = prev.map(r => ({
-    ...r, polygon: r.polygon.map(p => [...p]), anchor: r.anchor ? [...r.anchor] : null,
+    ...r, 
+    polygon: r.polygon.map(p => [...p]), 
+    anchor: r.anchor ? [...r.anchor] : null,
+    pins: r.pins ? r.pins.map(p => [...p]) : []
   }));
   if (editingRegionIdx >= detectedRegions.length) editingRegionIdx = detectedRegions.length - 1;
   drawEditOverlay();
 }
 const undoBtn = document.getElementById('undo-btn');
 if (undoBtn) undoBtn.addEventListener('click', undo);
-
-// ============================================================
-// 部位を新規手動追加
-// ============================================================
-let addingRegionMode = false;
-let newRegionPoints = [];
-const addRegionBtn = document.getElementById('add-region-btn');
-
-if (addRegionBtn) {
-  addRegionBtn.addEventListener('click', () => {
-    addingRegionMode = !addingRegionMode;
-    newRegionPoints = [];
-    const tip = document.getElementById('edit-tip-text');
-    if (addingRegionMode) {
-      addRegionBtn.style.background = 'rgba(167,139,250,0.2)'; addRegionBtn.style.borderColor = 'var(--accent)'; addRegionBtn.style.color = 'var(--accent)';
-      if (tip) tip.innerHTML = '<b>部位追加：</b>タップで頂点を打つ（3点以上）→ 最初の点をタップで確定';
-      panToolActive = false; if (panBtn) panBtn.classList.remove('active'); overlayCanvas.style.cursor = 'crosshair';
-    } else {
-      addRegionBtn.style.background = ''; addRegionBtn.style.borderColor = ''; addRegionBtn.style.color = '';
-      if (tip) tip.innerHTML = '<b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除';
-      drawEditOverlay();
-    }
-  });
-}
 
 function drawAddingOverlay() {
   drawEditOverlay();
@@ -1073,7 +1145,6 @@ function drawAddingOverlay() {
 // PINCH ZOOM & PAN (ズームとパン)
 // ============================================================
 let zoomScale = 1;
-let panX = 0, panY = 0;
 let pinchStartDist = 0;
 let pinchStartScale = 1;
 let pinchStartPanX = 0, pinchStartPanY = 0;
@@ -1176,7 +1247,11 @@ if (loadProjectBtn && projectFileInput) {
       try {
         const data = JSON.parse(ev.target.result);
         if (data.regions && Array.isArray(data.regions)) {
-          detectedRegions = data.regions;
+          // 🌟 ピン情報を読み込む処理を追加
+          detectedRegions = data.regions.map(r => ({
+              ...r,
+              pins: r.pins ? r.pins : []
+          }));
           
           if (data.settings) {
             animType = data.settings.animType || 'sway';
@@ -1222,7 +1297,7 @@ function segGroupEx(groupId, attr, setter) {
   const group = document.getElementById(groupId);
   if (!group) return;
   group.querySelectorAll('.seg-btn').forEach(btn => {
-    if(btn.id === 'inpaint-toggle-btn') return; // 除外
+    if(btn.id === 'inpaint-toggle-btn') return; 
     btn.addEventListener('click', () => {
       group.querySelectorAll('.seg-btn').forEach(b => {
         if(b.id === 'inpaint-toggle-btn') return;
