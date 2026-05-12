@@ -426,6 +426,38 @@ input[type=range]::-webkit-slider-thumb {
       </div>
     </div>
 
+    <!-- エクスポートパネル -->
+    <div class="panel" id="export-panel" style="display:none">
+      <div class="panel-title">エクスポート</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>形式</span>
+          <div style="display:flex;gap:4px" id="ex-fmt-group">
+            <button class="seg-btn active" data-fmt="gif" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">GIF</button>
+            <button class="seg-btn" data-fmt="webm" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">WebM</button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>フレーム数</span>
+          <div style="display:flex;gap:4px" id="ex-frames-group">
+            <button class="seg-btn" data-frames="12" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">12</button>
+            <button class="seg-btn active" data-frames="20" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">20</button>
+            <button class="seg-btn" data-frames="30" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">30</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ex-progress-wrap" style="display:none;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="width:100%;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div id="ex-progress-fill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;width:0%;transition:width 0.1s"></div>
+        </div>
+        <div id="ex-progress-label" style="font-size:10px;color:var(--muted);text-align:right">0%</div>
+      </div>
+
+      <button class="btn-primary" id="export-btn">🎬 保存する</button>
+    </div>
+
     <button class="btn-secondary" id="change-btn" style="display:none">画像を変更</button>
   </div>
 </main>
@@ -634,6 +666,8 @@ detectBtn.addEventListener('click', async () => {
 
     regionsPanel.style.display = 'block';
     animPanel.style.display = 'block';
+    const exPanel = document.getElementById('export-panel');
+    if (exPanel) exPanel.style.display = 'block';
     setStatus('done', `${detectedRegions.length}つの部位を検出しました。`);
     detectBtn.disabled = false;
 
@@ -1122,6 +1156,158 @@ overlayCanvas.addEventListener('mouseleave', onEditEnd);
 overlayCanvas.addEventListener('touchstart', onEditStart, { passive: false });
 overlayCanvas.addEventListener('touchmove', onEditMove, { passive: false });
 overlayCanvas.addEventListener('touchend', onEditEnd);
+
+// ============================================================
+// EXPORT (GIF / WebM)
+// ============================================================
+let exportFmt = 'gif';
+let exportFrames = 20;
+
+function segGroupEx(groupId, attr, setter) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('.seg-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'var(--surface2)';
+        b.style.color = 'var(--muted)';
+        b.style.borderColor = 'var(--border)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'rgba(167,139,250,0.12)';
+      btn.style.color = 'var(--accent)';
+      btn.style.borderColor = 'var(--accent)';
+      setter(btn.dataset[attr]);
+    });
+    // 初期状態の見た目
+    if (btn.classList.contains('active')) {
+      btn.style.background = 'rgba(167,139,250,0.12)';
+      btn.style.color = 'var(--accent)';
+      btn.style.borderColor = 'var(--accent)';
+    }
+  });
+}
+
+segGroupEx('ex-fmt-group', 'fmt', v => { exportFmt = v; });
+segGroupEx('ex-frames-group', 'frames', v => { exportFrames = parseInt(v); });
+
+function loadScriptOnce(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+const exportBtn = document.getElementById('export-btn');
+if (exportBtn) {
+  exportBtn.addEventListener('click', async () => {
+    if (!imageLoaded || detectedRegions.length === 0) return;
+    exportBtn.disabled = true;
+    exportBtn.textContent = '⏳ 処理中...';
+    const wrap = document.getElementById('ex-progress-wrap');
+    const fill = document.getElementById('ex-progress-fill');
+    const label = document.getElementById('ex-progress-label');
+    wrap.style.display = 'flex';
+    fill.style.width = '0%';
+
+    // 編集モードが有効なら抜けておく
+    if (editMode) {
+      editMode = false;
+      overlayCanvas.classList.remove('edit-mode');
+      editBar.classList.remove('visible');
+    }
+    stopAnim();
+
+    try {
+      const W = mainCanvas.width, H = mainCanvas.height;
+      const dur = parseFloat(document.getElementById('spd').value) * 1000;
+      const delay = Math.round(dur / exportFrames);
+
+      // エクスポート用のオフスクリーンキャンバス
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = W;
+      offCanvas.height = H;
+      const offCtx = offCanvas.getContext('2d');
+
+      // renderAnimFrameの出力先を一時的にoffCanvasにする方式は複雑なので、
+      // mainCanvasに描いて、各フレームでoffCanvasにコピーする
+      function captureFrame(t) {
+        renderAnimFrame(t);
+        offCtx.clearRect(0, 0, W, H);
+        offCtx.drawImage(mainCanvas, 0, 0);
+      }
+
+      function updateProgress(i, total, prefix) {
+        const pct = Math.round((i / total) * 100);
+        fill.style.width = pct + '%';
+        label.textContent = (prefix || '') + i + ' / ' + total + ' フレーム';
+      }
+
+      if (exportFmt === 'gif') {
+        if (typeof GIF === 'undefined') {
+          await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+        }
+        const gif = new GIF({ workers: 2, quality: 5, width: W, height: H });
+        for (let i = 0; i < exportFrames; i++) {
+          captureFrame((i / exportFrames) * (dur / 1000));
+          gif.addFrame(offCanvas, { delay, copy: true });
+          updateProgress(i + 1, exportFrames);
+          await new Promise(r => setTimeout(r, 0));
+        }
+        gif.on('progress', p => {
+          fill.style.width = (50 + p * 50) + '%';
+          label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
+        });
+        gif.on('finished', blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'hair_animated.gif'; a.click();
+          finishExport();
+        });
+        gif.render();
+
+      } else if (exportFmt === 'webm') {
+        const stream = offCanvas.captureStream(exportFrames);
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'hair_animated.webm'; a.click();
+          finishExport();
+        };
+        recorder.start();
+        for (let i = 0; i < exportFrames; i++) {
+          captureFrame((i / exportFrames) * (dur / 1000));
+          updateProgress(i + 1, exportFrames);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        recorder.stop();
+      }
+
+      function finishExport() {
+        exportBtn.disabled = false;
+        exportBtn.textContent = '🎬 保存する';
+        wrap.style.display = 'none';
+        fill.style.width = '0%';
+        startAnim();
+      }
+
+    } catch (err) {
+      alert('エクスポートエラー: ' + err.message);
+      exportBtn.disabled = false;
+      exportBtn.textContent = '🎬 保存する';
+      wrap.style.display = 'none';
+      startAnim();
+    }
+  });
+}
 
 } catch (e) {
   document.body.insertAdjacentHTML('afterbegin',
