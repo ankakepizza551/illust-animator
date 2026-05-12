@@ -273,8 +273,6 @@ input[type=range]::-webkit-slider-thumb {
 .anim-chip.active { background: rgba(167,139,250,0.1); border-color: var(--accent); color: var(--accent); }
 .anim-chip .ic { font-size: 15px; display: block; margin-bottom: 3px; }
 
-.hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
-
 /* edit mode */
 #overlay-canvas.edit-mode { pointer-events: all; cursor: crosshair; }
 #overlay-canvas.edit-mode.dragging { cursor: grabbing; }
@@ -340,29 +338,6 @@ input[type=range]::-webkit-slider-thumb {
 .btn-edit.active { background: rgba(167,139,250,0.12); border-color: var(--accent); color: var(--accent); }
 .btn-edit.danger:hover { border-color: #f87171; color: #f87171; }
 
-/* region selector in edit mode */
-.edit-region-select {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-.edit-region-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--muted);
-  transition: all 0.15s;
-}
-.edit-region-chip.active { border-color: var(--accent); color: var(--text); background: rgba(167,139,250,0.1); }
-.edit-region-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
-
 @media(max-width:680px){ main{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -405,6 +380,7 @@ input[type=range]::-webkit-slider-thumb {
       <div class="edit-tip" id="edit-tip-text"><b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除</div>
       <button class="btn-edit" id="undo-btn" title="元に戻す">↩ Undo</button>
       <button class="btn-edit" id="add-region-btn" title="部位を新規追加">＋ 部位追加</button>
+      <button class="btn-edit" id="pin-btn" title="動かしたくない場所を固定">📌 ピン</button>
       <button class="btn-edit" id="pan-btn" title="キャンバスを移動">✋ 移動</button>
       <button class="btn-edit danger" id="edit-done-btn">✓ 完了</button>
     </div>
@@ -465,10 +441,14 @@ input[type=range]::-webkit-slider-thumb {
         <div class="slider-label">なめらかさ <span id="smooth-val">0.6</span></div>
         <input type="range" id="smooth" min="0.1" max="1" step="0.05" value="0.6">
       </div>
-      
       <div class="slider-row">
         <div class="slider-label">境界のぼかし <span id="feather-val">8px</span></div>
         <input type="range" id="feather" min="0" max="30" step="1" value="8">
+      </div>
+
+      <div class="slider-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:18px; margin-bottom:0;">
+        <div class="slider-label" style="margin-bottom:0;">背景の自動補完 <span style="font-size:10px;color:var(--muted);font-weight:normal">(β版)</span></div>
+        <button id="inpaint-toggle-btn" class="seg-btn" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 10px;cursor:pointer;transition:all 0.2s;">OFF</button>
       </div>
 
     </div>
