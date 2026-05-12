@@ -3,330 +3,505 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>illust tools</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+<title>hair animator — AI部位検出</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #07080f;
-  --surface: #0f1018;
-  --border: #1e2030;
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --border: #252535;
   --accent: #a78bfa;
   --accent2: #f472b6;
-  --accent3: #34d399;
   --text: #e2e0ff;
-  --muted: #4a4870;
+  --muted: #5a5880;
+  --glow: rgba(167,139,250,0.15);
 }
-
 body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Noto Sans JP', sans-serif;
   min-height: 100vh;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-
-/* ---- background ---- */
-.bg-grid {
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: 0.4;
-  pointer-events: none;
-}
-.bg-glow {
-  position: fixed;
-  width: 600px; height: 600px;
-  border-radius: 50%;
-  filter: blur(120px);
-  pointer-events: none;
-  animation: driftGlow 12s ease-in-out infinite alternate;
-}
-.bg-glow.g1 { background: rgba(167,139,250,0.07); top: -200px; left: -100px; }
-.bg-glow.g2 { background: rgba(244,114,182,0.05); bottom: -200px; right: -100px; animation-delay: -6s; }
-@keyframes driftGlow {
-  from { transform: translate(0,0); }
-  to   { transform: translate(40px, 30px); }
-}
-
-/* ---- layout ---- */
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 24px;
-  position: relative;
-  z-index: 1;
-}
-
-/* ---- hero ---- */
-nav {
-  padding: 24px 0 0;
+header {
+  width: 100%;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
+  gap: 16px;
+  background: rgba(10,10,15,0.8);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.logo em { color: var(--accent2); font-style: normal; }
+.badge {
+  font-size: 10px;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.3);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.08em;
+}
+main {
+  width: 100%;
+  max-width: 1060px;
+  padding: 28px 20px;
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  gap: 20px;
+}
+
+/* ---- canvas area ---- */
+.canvas-wrap {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
-.nav-logo {
-  font-family: 'Syne', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-}
-.nav-logo em { color: var(--accent2); font-style: normal; }
-.nav-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
-.nav-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
-
-.hero {
-  padding: 80px 0 64px;
-  text-align: center;
-}
-.hero-eyebrow {
-  font-family: 'Syne', sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-.hero-eyebrow::before,
-.hero-eyebrow::after {
-  content: '';
-  width: 32px; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent));
-}
-.hero-eyebrow::after { background: linear-gradient(90deg, var(--accent), transparent); }
-
-h1 {
-  font-family: 'Syne', sans-serif;
-  font-size: clamp(42px, 7vw, 72px);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  margin-bottom: 20px;
-}
-h1 .line1 { display: block; color: var(--text); }
-h1 .line2 {
-  display: block;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.hero-desc {
-  font-size: 15px;
-  color: var(--muted);
-  line-height: 1.8;
-  max-width: 480px;
-  margin: 0 auto 40px;
-}
-
-.hero-tags {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.tag {
-  font-size: 11px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  letter-spacing: 0.04em;
-}
-
-/* ---- tool cards ---- */
-.tools-label {
-  font-family: 'Syne', sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.tools-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 80px;
-}
-
-.tool-card {
+.canvas-box {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 28px;
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  min-height: 460px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.2s;
-  cursor: pointer;
-}
-.tool-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-}
-.tool-card.card-a::before { background: radial-gradient(ellipse at 0% 0%, rgba(167,139,250,0.1), transparent 70%); }
-.tool-card.card-b::before { background: radial-gradient(ellipse at 0% 0%, rgba(244,114,182,0.1), transparent 70%); }
-
-.tool-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-.tool-card.card-b:hover { border-color: var(--accent2); }
-.tool-card:hover::before { opacity: 1; }
-
-.card-icon {
-  width: 44px; height: 44px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
+  touch-action: none;
 }
-.card-a .card-icon { background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.2); }
-.card-b .card-icon { background: rgba(244,114,182,0.12); border: 1px solid rgba(244,114,182,0.2); }
-
-.card-name {
-  font-family: 'Syne', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 4px;
+.canvas-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 65%);
+  pointer-events: none;
 }
-.card-a .card-name { color: var(--accent); }
-.card-b .card-name { color: var(--accent2); }
+#main-canvas {
+  max-width: 100%;
+  max-height: 460px;
+  display: block;
+  border-radius: 8px;
+}
+#dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px;
+  cursor: pointer;
+  text-align: center;
+  position: relative;
+}
+#dropzone.hidden { display: none; }
+.drop-ring {
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  border: 2px dashed var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+  transition: border-color 0.2s;
+}
+#dropzone:hover .drop-ring { border-color: var(--accent); }
+.drop-text { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.drop-text strong { color: var(--text); display: block; font-size: 14px; }
 
-.card-desc {
+/* status bar */
+.status-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
   font-size: 12px;
   color: var(--muted);
-  line-height: 1.7;
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s ease-in-out infinite; }
+.status-dot.done { background: #4ade80; box-shadow: 0 0 6px #4ade80; animation: none; }
+.status-dot.error { background: #f87171; animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ---- side panel ---- */
+.side { display: flex; flex-direction: column; gap: 16px; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+.panel-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
 }
 
-.card-features {
+/* region chips */
+.region-list { display: flex; flex-direction: column; gap: 8px; }
+.region-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-size: 13px;
 }
-.feat {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 5px;
+.region-item:hover { border-color: var(--accent); }
+.region-item.active { border-color: var(--accent); background: rgba(167,139,250,0.08); }
+.region-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.region-label { flex: 1; }
+.region-toggle {
+  width: 28px; height: 16px;
+  border-radius: 8px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.region-toggle.on { background: var(--accent); }
+.region-toggle::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: white;
+  top: 2px; left: 2px;
+  transition: transform 0.2s;
+}
+.region-toggle.on::after { transform: translateX(12px); }
+
+/* sliders */
+.slider-row { margin-bottom: 12px; }
+.slider-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.slider-label span { color: var(--text); font-family: 'Syne', sans-serif; font-size: 11px; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 3px;
+  background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg);
+  box-shadow: 0 0 5px rgba(167,139,250,0.5);
+}
+
+/* buttons */
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(244,114,182,0.15));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
   letter-spacing: 0.03em;
 }
-.card-a .feat { background: rgba(167,139,250,0.08); color: var(--accent); border: 1px solid rgba(167,139,250,0.15); }
-.card-b .feat { background: rgba(244,114,182,0.08); color: var(--accent2); border: 1px solid rgba(244,114,182,0.15); }
-
-.card-arrow {
-  position: absolute;
-  top: 24px; right: 24px;
-  font-size: 16px;
-  color: var(--border);
-  transition: color 0.2s, transform 0.2s;
+.btn-primary:hover { background: rgba(167,139,250,0.25); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-secondary {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 10px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-top: 8px;
 }
-.tool-card:hover .card-arrow { color: var(--accent); transform: translate(2px, -2px); }
-.card-b:hover .card-arrow { color: var(--accent2); }
+.btn-secondary:hover { color: var(--text); border-color: var(--accent); }
 
-/* ---- footer ---- */
-footer {
-  border-top: 1px solid var(--border);
-  padding: 28px 0;
+/* overlay canvas */
+#overlay-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.canvas-box.dragover { border-color: var(--accent); }
+
+/* anim type */
+.anim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.anim-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px 6px;
+  cursor: pointer;
   text-align: center;
+  transition: all 0.15s;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.anim-chip:hover { color: var(--text); border-color: var(--accent); }
+.anim-chip.active { background: rgba(167,139,250,0.1); border-color: var(--accent); color: var(--accent); }
+.anim-chip .ic { font-size: 15px; display: block; margin-bottom: 3px; }
+
+.hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
+
+/* edit mode */
+#overlay-canvas.edit-mode { pointer-events: all; cursor: crosshair; }
+#overlay-canvas.edit-mode.dragging { cursor: grabbing; }
+
+/* zoom wrapper */
+#canvas-zoom-wrap {
+  position: relative;
+  transform-origin: center center;
+  transition: transform 0.05s;
+  will-change: transform;
+}
+#zoom-controls {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: none;
+  gap: 4px;
+  z-index: 20;
+}
+#zoom-controls.visible { display: flex; }
+.zoom-btn {
+  background: rgba(20,20,30,0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 16px;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.zoom-btn:active { background: rgba(167,139,250,0.3); }
+
+.edit-bar {
+  display: none;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
   font-size: 11px;
   color: var(--muted);
-  letter-spacing: 0.05em;
 }
+.edit-bar.visible { display: flex; }
+.edit-tip { flex: 1; min-width: 120px; line-height: 1.5; }
+.edit-tip b { color: var(--text); }
 
-@media(max-width: 560px) {
-  .tools-grid { grid-template-columns: 1fr; }
-  h1 { font-size: 36px; }
+.btn-edit {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
+.btn-edit:hover { color: var(--text); border-color: var(--accent); }
+.btn-edit.active { background: rgba(167,139,250,0.12); border-color: var(--accent); color: var(--accent); }
+.btn-edit.danger:hover { border-color: #f87171; color: #f87171; }
+
+@media(max-width:680px){ main{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
+<header>
+  <a href="index.html" style="font-size:11px;color:var(--muted);text-decoration:none;font-family:'Syne',sans-serif;letter-spacing:0.05em;transition:color 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">← ツール一覧</a>
+  <div class="logo" style="margin-left:4px">hair<em>.</em>animator</div>
+  <div class="badge">AI 部位検出</div>
+</header>
 
-<div class="bg-grid"></div>
-<div class="bg-glow g1"></div>
-<div class="bg-glow g2"></div>
-
-<div class="container">
-  <nav>
-    <div class="nav-logo">illust<em>.</em>tools</div>
-    <div class="nav-dot"></div>
-    <div class="nav-sub">illustration animation toolkit</div>
-  </nav>
-
-  <section class="hero">
-    <div class="hero-eyebrow">browser-based · no install</div>
-    <h1>
-      <span class="line1">イラストを</span>
-      <span class="line2">動かすツール集</span>
-    </h1>
-    <p class="hero-desc">
-      アップロードするだけで、イラストに動きをつけてGIF・WebMで保存できます。インストール不要、ブラウザで完結。
-    </p>
-    <div class="hero-tags">
-      <span class="tag">PNG / JPG / WebP 対応</span>
-      <span class="tag">GIF 出力</span>
-      <span class="tag">WebM 出力</span>
-      <span class="tag">AI 部位検出</span>
+<main>
+  <div class="canvas-wrap">
+    <div class="canvas-box" id="canvas-box">
+      <div id="dropzone">
+        <input type="file" id="file-input" accept="image/*" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10">
+        <div class="drop-ring">🧑‍🎨</div>
+        <div class="drop-text">
+          <strong>イラストをドロップ</strong>
+          クリックして選択<br>
+          <small>PNG / JPG / WebP</small>
+        </div>
+      </div>
+      <div id="canvas-zoom-wrap">
+        <canvas id="main-canvas" style="display:none"></canvas>
+        <canvas id="overlay-canvas" style="display:none"></canvas>
+      </div>
+      <div id="zoom-controls">
+        <button class="zoom-btn" id="zoom-in-btn">＋</button>
+        <button class="zoom-btn" id="zoom-reset-btn" style="font-size:11px;width:auto;padding:0 6px">100%</button>
+        <button class="zoom-btn" id="zoom-out-btn">－</button>
+      </div>
     </div>
-  </section>
 
-  <div class="tools-label">ツール一覧</div>
+    <div class="status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">イラストをアップロードしてください</span>
+    </div>
 
-  <div class="tools-grid">
-    <a class="tool-card card-a" href="animator.html">
-      <div class="card-arrow">↗</div>
-      <div class="card-icon">🌸</div>
-      <div>
-        <div class="card-name">illust.animator</div>
-        <div class="card-desc">イラスト全体にふわふわ・ゆらゆら・呼吸するような動きをつけます。グロー効果やパーティクルも追加可能。</div>
-      </div>
-      <div class="card-features">
-        <span class="feat">6種アニメーション</span>
-        <span class="feat">グロー効果</span>
-        <span class="feat">パーティクル</span>
-        <span class="feat">GIF / WebM</span>
-      </div>
-    </a>
-
-    <a class="tool-card card-b" href="hair-animator.html">
-      <div class="card-arrow">↗</div>
-      <div class="card-icon">✨</div>
-      <div>
-        <div class="card-name">hair.animator</div>
-        <div class="card-desc">AIがイラストを解析して髪・スカート・リボンなどの部位を自動検出。指定した部位だけを揺らすことができます。</div>
-      </div>
-      <div class="card-features">
-        <span class="feat">AI部位検出</span>
-        <span class="feat">4種ワープ</span>
-        <span class="feat">部位ごと ON/OFF</span>
-      </div>
-    </a>
+    <div class="edit-bar" id="edit-bar">
+      <div class="edit-tip" id="edit-tip-text"><b>編集モード：</b>頂点ドラッグで移動 / 辺タップで追加 / 頂点ダブルタップで削除</div>
+      <button class="btn-edit" id="undo-btn" title="元に戻す">↩ Undo</button>
+      <button class="btn-edit" id="add-region-btn" title="部位を新規追加">＋ 部位追加</button>
+      <button class="btn-edit" id="pan-btn" title="キャンバスを移動">✋ 移動</button>
+      <button class="btn-edit danger" id="edit-done-btn">✓ 完了</button>
+    </div>
   </div>
-</div>
 
-<footer>
-  made with Claude · illust.tools
-</footer>
+  <div class="side">
+    <div class="panel">
+      <div class="panel-title">AI 部位検出</div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Gemini APIキー</div>
+        <input type="password" id="api-key-input" placeholder="AIza..." style="
+          width:100%;padding:9px 12px;
+          background:var(--surface2);border:1px solid var(--border);
+          border-radius:8px;color:var(--text);font-size:12px;
+          font-family:'Noto Sans JP',sans-serif;outline:none;
+          transition:border-color 0.15s;
+        " onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.5">
+          <a href="https://aistudio.google.com/" target="_blank" style="color:var(--accent)">aistudio.google.com</a> で取得。入力内容はこのブラウザにのみ保持され、外部には送信されません。
+        </div>
+      </div>
+      <button class="btn-primary" id="detect-btn" disabled>✨ 部位を自動検出</button>
+      <button class="btn-secondary" id="redetect-btn" style="display:none;margin-top:6px">🔄 再検出する</button>
+    </div>
 
+    <div class="panel" id="regions-panel" style="display:none">
+      <div class="panel-title">検出された部位</div>
+      <div class="region-list" id="region-list"></div>
+      <button class="btn-edit active" id="edit-btn" style="width:100%;margin-top:12px;padding:9px">✏️ ポリゴンを手動調整</button>
+
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn-secondary" id="save-project-btn" style="margin-top:0; flex:1;" title="現在のポリゴン情報をPCに保存します">💾 データ保存</button>
+        <button class="btn-secondary" id="load-project-btn" style="margin-top:0; flex:1;" title="保存したポリゴン情報を読み込みます">📂 データ読込</button>
+        <input type="file" id="project-file-input" accept=".json" style="display:none">
+      </div>
+    </div>
+
+    <div class="panel" id="anim-panel" style="display:none">
+      <div class="panel-title">アニメーション設定</div>
+      <div class="anim-grid" id="anim-type-grid">
+        <button class="anim-chip active" data-anim="sway"><span class="ic">🌿</span>ゆらゆら</button>
+        <button class="anim-chip" data-anim="flutter"><span class="ic">🍃</span>なびく</button>
+        <button class="anim-chip" data-anim="bounce"><span class="ic">🎀</span>はずむ</button>
+        <button class="anim-chip" data-anim="wave"><span class="ic">🌊</span>波打つ</button>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+
+      <div class="slider-row">
+        <div class="slider-label">スピード <span id="spd-val">2.5s</span></div>
+        <input type="range" id="spd" min="0.8" max="5" step="0.1" value="2.5">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">揺れ幅 <span id="amp-val">12</span></div>
+        <input type="range" id="amp" min="3" max="30" step="1" value="12">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">なめらかさ <span id="smooth-val">0.6</span></div>
+        <input type="range" id="smooth" min="0.1" max="1" step="0.05" value="0.6">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">境界のぼかし <span id="feather-val">8px</span></div>
+        <input type="range" id="feather" min="0" max="30" step="1" value="8">
+      </div>
+
+      <div class="slider-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:18px; margin-bottom:0;">
+        <div class="slider-label" style="margin-bottom:0;">背景の自動補完 <span style="font-size:10px;color:var(--muted);font-weight:normal">(β版)</span></div>
+        <button id="inpaint-toggle-btn" class="seg-btn" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 10px;cursor:pointer;transition:all 0.2s;">OFF</button>
+      </div>
+
+    </div>
+
+    <div class="panel" id="export-panel" style="display:none">
+      <div class="panel-title">エクスポート</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>形式</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap" id="ex-fmt-group">
+            <button class="seg-btn active" data-fmt="gif" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">GIF</button>
+            <button class="seg-btn" data-fmt="webm" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">WebM</button>
+            <button class="seg-btn" data-fmt="webp" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">WebP透過</button>
+            <button class="seg-btn" data-fmt="apng" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">APNG透過</button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>フレーム数</span>
+          <div style="display:flex;gap:4px" id="ex-frames-group">
+            <button class="seg-btn" data-frames="12" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">12</button>
+            <button class="seg-btn active" data-frames="20" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">20</button>
+            <button class="seg-btn" data-frames="30" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">30</button>
+          </div>
+        </div>
+        <div id="gif-quality-row" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)">
+          <span>GIF品質</span>
+          <div style="display:flex;gap:4px" id="ex-quality-group">
+            <button class="seg-btn active" data-quality="10" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">速い</button>
+            <button class="seg-btn" data-quality="5" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">普通</button>
+            <button class="seg-btn" data-quality="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">高品質</button>
+          </div>
+        </div>
+        <div id="ex-fmt-note" style="font-size:10px;color:var(--muted);line-height:1.5">
+          GIF: どこでも使える / WebM: 軽量・透過対応 / WebP透過・APNG透過: PNG素材向け
+        </div>
+      </div>
+
+      <div id="ex-progress-wrap" style="display:none;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="width:100%;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div id="ex-progress-fill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;width:0%;transition:width 0.1s"></div>
+        </div>
+        <div id="ex-progress-label" style="font-size:10px;color:var(--muted);text-align:right">0%</div>
+      </div>
+
+      <button class="btn-primary" id="export-btn">🎬 保存する</button>
+    </div>
+
+    <button class="btn-secondary" id="change-btn" style="display:none">画像を変更</button>
+  </div>
+</main>
+
+<script src="hair-animator.js"></script>
 </body>
 </html>
