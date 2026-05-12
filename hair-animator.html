@@ -425,7 +425,10 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </main>
 
-<input type="file" id="file-input" accept="image/*">
+<!-- 変更後：canvas-boxの中の先頭に移動 -->
+<div class="canvas-box" id="canvas-box">
+  <input type="file" id="file-input" accept="image/*">
+<div id="dropzone">
 
 <script>
 // ============================================================
