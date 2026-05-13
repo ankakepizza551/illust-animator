@@ -93,21 +93,6 @@ function loadImage(file) {
     dropzone.classList.add('hidden');
     detectBtn.disabled = false;
     changeBtn.style.display = 'block';
-
-    // プロジェクトが先に読み込まれていた場合はそのまま開始
-    if (detectedRegions.length > 0) {
-      renderRegionList();
-      cacheInpaintedBackgrounds();
-      drawOverlay();
-      startAnim();
-      regionsPanel.style.display = 'block';
-      animPanel.style.display = 'block';
-      const exPanel = document.getElementById('export-panel');
-      if (exPanel) exPanel.style.display = 'block';
-      setStatus('done', `イラスト読み込み完了。プロジェクトデータ（${detectedRegions.length}部位）を適用しました。`);
-      return;
-    }
-
     detectedRegions = [];
     regionsPanel.style.display = 'none';
     animPanel.style.display = 'none';
@@ -169,6 +154,8 @@ detectBtn.addEventListener('click', async () => {
       detectBtn.disabled = false;
       return;
     }
+    // APIキーを保存
+    try { localStorage.setItem('hair_animator_api_key', apiKey); } catch(e) {}
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
@@ -299,17 +286,33 @@ function renderRegionList() {
       });
     }
 
-    // 🌟 ゴミ箱ボタンの処理
+    // 削除ボタン（インライン確認）
     delBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (confirm(`「${region.label}」を削除してもよろしいですか？`)) {
+      // 確認ボタンをインライン表示
+      if (delBtn.dataset.confirming === '1') {
         saveUndoState();
         detectedRegions.splice(i, 1);
         if (editingRegionIdx === i) editingRegionIdx = -1;
         else if (editingRegionIdx > i) editingRegionIdx--;
         renderRegionList();
         cacheInpaintedBackgrounds();
-        if(editMode) drawEditOverlay(); else drawOverlay();
+        if (editMode) drawEditOverlay(); else drawOverlay();
+      } else {
+        delBtn.dataset.confirming = '1';
+        delBtn.textContent = '本当に削除？';
+        delBtn.style.color = '#fff';
+        delBtn.style.background = '#ef4444';
+        delBtn.style.borderRadius = '6px';
+        delBtn.style.padding = '2px 6px';
+        delBtn.style.fontSize = '10px';
+        setTimeout(() => {
+          if (delBtn.dataset.confirming === '1') {
+            delBtn.dataset.confirming = '0';
+            delBtn.textContent = '🗑️';
+            delBtn.style.cssText = 'background:none; border:none; color:#f87171; cursor:pointer; font-size:13px; margin-right:6px; padding:4px;';
+          }
+        }, 2500);
       }
     });
 
@@ -385,8 +388,31 @@ function renderRegionList() {
     });
 
     item.querySelector('.region-label').style.cursor = 'pointer';
-    item.querySelector('.region-label').addEventListener('click', () => {
-      settingPanel.style.display = settingPanel.style.display === 'none' ? 'block' : 'none';
+    item.querySelector('.region-label').addEventListener('click', (e) => {
+      // ラベル部分（テキスト）をダブルクリックで編集、シングルクリックで設定パネル
+      if (e.detail === 2) {
+        const labelEl = item.querySelector('.region-label');
+        const current = region.label;
+        const input = document.createElement('input');
+        input.value = current;
+        input.style.cssText = 'background:var(--surface);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:13px;padding:2px 6px;width:100%;outline:none';
+        labelEl.innerHTML = '';
+        labelEl.appendChild(input);
+        input.focus();
+        input.select();
+        const finish = () => {
+          const newLabel = input.value.trim() || current;
+          detectedRegions[i].label = newLabel;
+          renderRegionList();
+        };
+        input.addEventListener('blur', finish);
+        input.addEventListener('keydown', e2 => {
+          if (e2.key === 'Enter') finish();
+          if (e2.key === 'Escape') { detectedRegions[i].label = current; renderRegionList(); }
+        });
+      } else {
+        settingPanel.style.display = settingPanel.style.display === 'none' ? 'block' : 'none';
+      }
     });
 
     regionList.appendChild(item);
@@ -627,8 +653,9 @@ function renderAnimFrame(t) {
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
 
+    const pinsHash = (region.pins || []).map(p => p[0].toFixed(4)+','+p[1].toFixed(4)).join('|');
     const polyHash = region.polygon.map(p => p[0].toFixed(4)+','+p[1].toFixed(4)).join('|');
-    if (!region._cache || region._cache.W !== W || region._cache.H !== H || region._cache.feather !== feather || region._cache.polyHash !== polyHash) {
+    if (!region._cache || region._cache.W !== W || region._cache.H !== H || region._cache.feather !== feather || region._cache.polyHash !== polyHash || region._cache.pinsHash !== pinsHash) {
       const maskCanvas = document.createElement('canvas');
       maskCanvas.width = regionW; maskCanvas.height = regionH;
       const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
@@ -654,7 +681,7 @@ function renderAnimFrame(t) {
       const out = tCtx.createImageData(regionW, regionH);
       
       region._cache = {
-        W, H, feather, polyHash,
+        W, H, feather, polyHash, pinsHash,
         maskData, tmp, tCtx,
         src: imgData.data,
         out, dst: out.data
@@ -1402,23 +1429,10 @@ if (loadProjectBtn && projectFileInput) {
 
           undoStack = [];
           saveUndoState();
-
-          if (imageLoaded) {
-            renderRegionList();
-            drawOverlay();
-            startAnim();
-            regionsPanel.style.display = 'block';
-            animPanel.style.display = 'block';
-            const exPanel = document.getElementById('export-panel');
-            if (exPanel) exPanel.style.display = 'block';
-            setStatus('done', `プロジェクトを読み込みました（${detectedRegions.length}部位）`);
-          } else {
-            setStatus('idle', '📂 プロジェクトデータを読み込みました。次にイラストをアップロードしてください。');
-            const dropText = document.querySelector('.drop-text');
-            if (dropText) {
-              dropText.innerHTML = '<strong style="color:var(--accent)">✅ プロジェクット読込済み</strong>イラストをアップロードして開始<br><small>PNG / JPG / WebP</small>';
-            }
-          }
+          renderRegionList();
+          drawOverlay();
+          startAnim();
+          setStatus('done', `プロジェクトを読み込みました（${detectedRegions.length}部位）`);
         } else {
           throw new Error('無効なデータ形式です');
         }
@@ -1431,6 +1445,18 @@ if (loadProjectBtn && projectFileInput) {
     e.target.value = '';
   });
 }
+
+// ============================================================
+// INIT
+// ============================================================
+// APIキーをlocalStorageから復元
+try {
+  const savedKey = localStorage.getItem('hair_animator_api_key');
+  if (savedKey) {
+    const keyInput = document.getElementById('api-key-input');
+    if (keyInput) keyInput.value = savedKey;
+  }
+} catch(e) {}
 
 // ============================================================
 // EXPORT
@@ -1536,7 +1562,7 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { downloadBlob(blob, 'hair_animated.gif'); finishExport(); });
+        gif.on('finished', blob => { showPreview(blob, 'hair_animated.gif', 'image/gif'); finishExport(); });
         gif.render();
         return;
 
@@ -1545,7 +1571,7 @@ if (exportBtn) {
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => { downloadBlob(new Blob(chunks, { type: 'video/webm' }), 'hair_animated.webm'); finishExport(); };
+        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated.webm', 'video/webm'); finishExport(); };
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
           captureFrame(i / exportFrames * (dur / 1000));
@@ -1561,7 +1587,7 @@ if (exportBtn) {
         const recorder = new MediaRecorder(stream, { mimeType });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => { downloadBlob(new Blob(chunks, { type: 'video/webm' }), 'hair_animated_alpha.webm'); finishExport(); };
+        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated_alpha.webm', 'video/webm'); finishExport(); };
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
@@ -1588,7 +1614,7 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { downloadBlob(blob, 'hair_animated_hq.gif'); finishExport(); });
+        gif.on('finished', blob => { showPreview(blob, 'hair_animated_hq.gif', 'image/gif'); finishExport(); });
         gif.render();
         return;
       }
@@ -1598,6 +1624,44 @@ if (exportBtn) {
     } catch (err) {
       alert('エクスポートエラー: ' + err.message);
       finishExport();
+    }
+
+    function showPreview(blob, filename, mimeType) {
+      const url = URL.createObjectURL(blob);
+      const modal = document.getElementById('preview-modal');
+      const previewImg = document.getElementById('preview-gif');
+      const downloadBtn = document.getElementById('preview-download-btn');
+      const closeBtn = document.getElementById('preview-close-btn');
+
+      // GIF/APNGはimgで、WebMはvideoで表示
+      if (mimeType === 'video/webm') {
+        let video = document.getElementById('preview-video');
+        if (!video) {
+          video = document.createElement('video');
+          video.id = 'preview-video';
+          video.autoplay = true;
+          video.loop = true;
+          video.muted = true;
+          video.style.cssText = 'max-width:min(400px,80vw);max-height:50vh;border-radius:8px;display:block;margin:0 auto';
+          previewImg.parentNode.insertBefore(video, previewImg);
+        }
+        previewImg.style.display = 'none';
+        video.style.display = 'block';
+        video.src = url;
+      } else {
+        const video = document.getElementById('preview-video');
+        if (video) video.style.display = 'none';
+        previewImg.style.display = 'block';
+        previewImg.src = url;
+      }
+
+      modal.style.display = 'flex';
+
+      downloadBtn.onclick = () => downloadBlob(blob, filename);
+      closeBtn.onclick = () => {
+        modal.style.display = 'none';
+        URL.revokeObjectURL(url);
+      };
     }
 
     function downloadBlob(blob, name) {
