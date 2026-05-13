@@ -494,11 +494,20 @@ input[type=range]::-webkit-slider-thumb {
           <div style="display:flex;gap:4px" id="ex-quality-group">
             <button class="seg-btn active" data-quality="10" style="background:rgba(167,139,250,0.12);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 9px;cursor:pointer">速い</button>
             <button class="seg-btn" data-quality="5" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">普通</button>
-            <button class="seg-btn" data-quality="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer">高品質</button>
+            <button class="seg-btn" data-quality="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer" title="数分かかる場合があります">高品質 ⚠</button>
           </div>
         </div>
+        <!-- GIF高品質警告 -->
+        <div id="gif-heavy-warning" style="display:none;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:8px 10px;font-size:10px;color:#fbbf24;line-height:1.6">
+          ⚠ 高品質モードは数分かかる場合があります。GIFは最大256色のため、見た目の差は小さいです。品質重視なら <b>WebM</b> がおすすめです。
+        </div>
+        <!-- 推奨設定ヒント -->
+        <div id="ex-recommend" style="background:rgba(167,139,250,0.06);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:10px;color:var(--muted);line-height:1.8">
+          <div style="color:var(--text);font-size:11px;margin-bottom:4px">💡 推奨設定</div>
+          <div id="ex-recommend-text">GIF・等倍・20f・速い — バランス重視</div>
+        </div>
         <div id="ex-fmt-note" style="font-size:10px;color:var(--muted);line-height:1.5">
-          GIF: どこでも使える / WebM: 軽量・透過対応 / WebP透過・APNG透過: PNG素材向け
+          GIF: どこでも使える / WebM: 軽量で高品質 / WebP透過・APNG透過: 動画編集素材向け
         </div>
       </div>
 

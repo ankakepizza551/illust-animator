@@ -1492,14 +1492,48 @@ function segGroupEx(groupId, attr, setter) {
   });
 }
 
-segGroupEx('ex-res-group', 'res', v => { exportRes = parseFloat(v); });
+segGroupEx('ex-res-group', 'res', v => { exportRes = parseFloat(v); updateExportHint(); });
 segGroupEx('ex-fmt-group', 'fmt', v => {
   exportFmt = v;
   const qRow = document.getElementById('gif-quality-row');
   if (qRow) qRow.style.display = v === 'gif' ? 'flex' : 'none';
+  updateExportHint();
 });
-segGroupEx('ex-frames-group', 'frames', v => { exportFrames = parseInt(v); });
-segGroupEx('ex-quality-group', 'quality', v => { exportQuality = parseInt(v); });
+segGroupEx('ex-frames-group', 'frames', v => { exportFrames = parseInt(v); updateExportHint(); });
+segGroupEx('ex-quality-group', 'quality', v => { exportQuality = parseInt(v); updateExportHint(); });
+
+function updateExportHint() {
+  const warning = document.getElementById('gif-heavy-warning');
+  const recommend = document.getElementById('ex-recommend-text');
+
+  // 高品質警告
+  if (warning) {
+    warning.style.display = (exportFmt === 'gif' && exportQuality === 1) ? 'block' : 'none';
+  }
+
+  // 推奨テキスト
+  if (!recommend) return;
+  if (exportFmt === 'webm' || exportFmt === 'webp') {
+    recommend.textContent = '✅ 動画形式は速くて高品質。動画編集ソフトへの素材に最適';
+  } else if (exportFmt === 'gif' && exportRes <= 0.5 && exportFrames <= 12) {
+    recommend.textContent = '⚡ SNS・Discord向け。軽くて速い';
+  } else if (exportFmt === 'gif' && exportQuality === 1) {
+    recommend.textContent = '⚠ GIF高品質は時間がかかる割に効果小。WebMを推奨';
+    recommend.style.color = '#fbbf24';
+    return;
+  } else if (exportFmt === 'gif' && exportRes >= 1 && exportFrames >= 30) {
+    recommend.textContent = '⚠ 等倍×30フレームは重い。75%×20fでも十分きれい';
+    recommend.style.color = '#fbbf24';
+    return;
+  } else if (exportFmt === 'gif' && exportRes === 0.75 && exportFrames === 20) {
+    recommend.textContent = '✅ バランス重視のおすすめ設定';
+  } else if (exportFmt === 'apng') {
+    recommend.textContent = '🎨 透過PNG素材向け。ファイルサイズは大きめ';
+  } else {
+    recommend.textContent = 'GIF・75%・20f・速い — バランス重視';
+  }
+  recommend.style.color = 'var(--muted)';
+}
 
 function loadScriptOnce(src) {
   return new Promise((res, rej) => {
