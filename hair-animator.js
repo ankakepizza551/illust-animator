@@ -93,6 +93,21 @@ function loadImage(file) {
     dropzone.classList.add('hidden');
     detectBtn.disabled = false;
     changeBtn.style.display = 'block';
+
+    // プロジェクトが先に読み込まれていた場合はそのまま開始
+    if (detectedRegions.length > 0) {
+      renderRegionList();
+      cacheInpaintedBackgrounds();
+      drawOverlay();
+      startAnim();
+      regionsPanel.style.display = 'block';
+      animPanel.style.display = 'block';
+      const exPanel = document.getElementById('export-panel');
+      if (exPanel) exPanel.style.display = 'block';
+      setStatus('done', `イラスト読み込み完了。プロジェクトデータ（${detectedRegions.length}部位）を適用しました。`);
+      return;
+    }
+
     detectedRegions = [];
     regionsPanel.style.display = 'none';
     animPanel.style.display = 'none';
@@ -1387,10 +1402,23 @@ if (loadProjectBtn && projectFileInput) {
 
           undoStack = [];
           saveUndoState();
-          renderRegionList();
-          drawOverlay();
-          startAnim();
-          alert('プロジェクトデータを読み込みました！');
+
+          if (imageLoaded) {
+            renderRegionList();
+            drawOverlay();
+            startAnim();
+            regionsPanel.style.display = 'block';
+            animPanel.style.display = 'block';
+            const exPanel = document.getElementById('export-panel');
+            if (exPanel) exPanel.style.display = 'block';
+            setStatus('done', `プロジェクトを読み込みました（${detectedRegions.length}部位）`);
+          } else {
+            setStatus('idle', '📂 プロジェクトデータを読み込みました。次にイラストをアップロードしてください。');
+            const dropText = document.querySelector('.drop-text');
+            if (dropText) {
+              dropText.innerHTML = '<strong style="color:var(--accent)">✅ プロジェクット読込済み</strong>イラストをアップロードして開始<br><small>PNG / JPG / WebP</small>';
+            }
+          }
         } else {
           throw new Error('無効なデータ形式です');
         }
@@ -1404,12 +1432,8 @@ if (loadProjectBtn && projectFileInput) {
   });
 }
 
-// ドロップゾーンからの読み込みボタン
-const loadFromTopBtn = document.getElementById('load-project-from-top-btn');
-if (loadFromTopBtn && projectFileInput) {
-  loadFromTopBtn.addEventListener('click', () => projectFileInput.click());
-}
-
+// ============================================================
+// EXPORT
 // ============================================================
 let exportFmt = 'gif';
 let exportFrames = 20;
