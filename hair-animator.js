@@ -1464,6 +1464,7 @@ try {
 let exportFmt = 'gif';
 let exportFrames = 20;
 let exportQuality = 10;
+let exportRes = 1.0;
 
 function segGroupEx(groupId, attr, setter) {
   const group = document.getElementById(groupId);
@@ -1485,6 +1486,7 @@ function segGroupEx(groupId, attr, setter) {
   });
 }
 
+segGroupEx('ex-res-group', 'res', v => { exportRes = parseFloat(v); });
 segGroupEx('ex-fmt-group', 'fmt', v => {
   exportFmt = v;
   const qRow = document.getElementById('gif-quality-row');
@@ -1523,24 +1525,19 @@ if (exportBtn) {
 
     try {
       const W = mainCanvas.width, H = mainCanvas.height;
+      const expW = Math.round(W * exportRes);
+      const expH = Math.round(H * exportRes);
       const dur = parseFloat(document.getElementById('spd').value) * 1000;
       const delay = Math.round(dur / exportFrames);
 
       const offCanvas = document.createElement('canvas');
-      offCanvas.width = W; offCanvas.height = H;
+      offCanvas.width = expW; offCanvas.height = expH;
       const offCtx = offCanvas.getContext('2d');
-      const isTransparent = exportFmt === 'webp' || exportFmt === 'apng';
 
       function captureFrame(t) {
-        if (isTransparent) offCtx.clearRect(0, 0, W, H);
         renderAnimFrame(t);
-        if (isTransparent) {
-          offCtx.clearRect(0, 0, W, H);
-          offCtx.drawImage(mainCanvas, 0, 0);
-        } else {
-          offCtx.clearRect(0, 0, W, H);
-          offCtx.drawImage(mainCanvas, 0, 0);
-        }
+        offCtx.clearRect(0, 0, expW, expH);
+        offCtx.drawImage(mainCanvas, 0, 0, W, H, 0, 0, expW, expH);
       }
 
       function updateProgress(i, total, prefix) {
@@ -1551,7 +1548,7 @@ if (exportBtn) {
 
       if (exportFmt === 'gif') {
         await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
-        const gif = new GIF({ workers: 2, quality: exportQuality, width: W, height: H });
+        const gif = new GIF({ workers: 4, quality: exportQuality, width: expW, height: expH });
         for (let i = 0; i < exportFrames; i++) {
           captureFrame(i / exportFrames * (dur / 1000));
           gif.addFrame(offCanvas, { delay, copy: true });
@@ -1601,7 +1598,7 @@ if (exportBtn) {
 
       } else if (exportFmt === 'apng') {
         await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
-        const gif = new GIF({ workers: 2, quality: 1, width: W, height: H, transparent: 0x000000 });
+        const gif = new GIF({ workers: 4, quality: 1, width: expW, height: expH, transparent: 0x000000 });
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
           offCtx.clearRect(0, 0, W, H);
