@@ -527,9 +527,10 @@ input[type=range]::-webkit-slider-thumb {
 <script src="hair-animator.js"></script>
 <!-- export preview modal -->
 <div id="preview-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;flex-direction:column;gap:16px">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:90vw;text-align:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:min(480px,92vw);text-align:center">
     <div style="font-family:'Syne',sans-serif;font-size:11px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:12px">エクスポートプレビュー</div>
-    <img id="preview-gif" style="max-width:min(400px,80vw);max-height:50vh;border-radius:8px;display:block;margin:0 auto">
+    <div id="preview-size-note" style="font-size:10px;color:var(--muted);margin-bottom:8px"></div>
+    <img id="preview-gif" style="max-width:100%;max-height:50vh;border-radius:8px;display:block;margin:0 auto">
     <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
       <button id="preview-download-btn" style="background:linear-gradient(135deg,rgba(167,139,250,0.2),rgba(244,114,182,0.15));border:1px solid var(--accent);border-radius:10px;color:var(--accent);font-size:13px;padding:11px 24px;cursor:pointer;font-family:'Noto Sans JP',sans-serif">⬇ ダウンロード</button>
       <button id="preview-close-btn" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-size:13px;padding:11px 24px;cursor:pointer;font-family:'Noto Sans JP',sans-serif">閉じる</button>

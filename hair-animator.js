@@ -1669,6 +1669,15 @@ if (exportBtn) {
       const previewImg = document.getElementById('preview-gif');
       const downloadBtn = document.getElementById('preview-download-btn');
       const closeBtn = document.getElementById('preview-close-btn');
+      const sizeNote = document.getElementById('preview-size-note');
+
+      // サイズ表示
+      if (sizeNote) {
+        const kb = (blob.size / 1024).toFixed(0);
+        const mb = (blob.size / 1024 / 1024).toFixed(1);
+        const sizeStr = blob.size > 1024 * 1024 ? mb + ' MB' : kb + ' KB';
+        sizeNote.textContent = `${expW}×${expH}px · ${sizeStr}`;
+      }
 
       // GIF/APNGはimgで、WebMはvideoで表示
       if (mimeType === 'video/webm') {
