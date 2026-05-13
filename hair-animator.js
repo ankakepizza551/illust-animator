@@ -1602,7 +1602,7 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { showPreview(blob, 'hair_animated.gif', 'image/gif'); finishExport(); });
+        gif.on('finished', blob => { showPreview(blob, 'hair_animated.gif', 'image/gif', expW, expH); finishExport(); });
         gif.render();
         return;
 
@@ -1611,7 +1611,7 @@ if (exportBtn) {
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated.webm', 'video/webm'); finishExport(); };
+        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated.webm', 'video/webm', expW, expH); finishExport(); };
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
           captureFrame(i / exportFrames * (dur / 1000));
@@ -1627,7 +1627,7 @@ if (exportBtn) {
         const recorder = new MediaRecorder(stream, { mimeType });
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated_alpha.webm', 'video/webm'); finishExport(); };
+        recorder.onstop = () => { showPreview(new Blob(chunks, { type: 'video/webm' }), 'hair_animated_alpha.webm', 'video/webm', expW, expH); finishExport(); };
         recorder.start();
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
@@ -1654,7 +1654,7 @@ if (exportBtn) {
           fill.style.width = (50 + p * 50) + '%';
           label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
         });
-        gif.on('finished', blob => { showPreview(blob, 'hair_animated_hq.gif', 'image/gif'); finishExport(); });
+        gif.on('finished', blob => { showPreview(blob, 'hair_animated_hq.gif', 'image/gif', expW, expH); finishExport(); });
         gif.render();
         return;
       }
@@ -1666,7 +1666,7 @@ if (exportBtn) {
       finishExport();
     }
 
-    function showPreview(blob, filename, mimeType) {
+    function showPreview(blob, filename, mimeType, w, h) {
       const url = URL.createObjectURL(blob);
       const modal = document.getElementById('preview-modal');
       const previewImg = document.getElementById('preview-gif');
@@ -1679,7 +1679,7 @@ if (exportBtn) {
         const kb = (blob.size / 1024).toFixed(0);
         const mb = (blob.size / 1024 / 1024).toFixed(1);
         const sizeStr = blob.size > 1024 * 1024 ? mb + ' MB' : kb + ' KB';
-        sizeNote.textContent = `${expW}×${expH}px · ${sizeStr}`;
+        sizeNote.textContent = `${w}×${h}px · ${sizeStr}`;
       }
 
       // GIF/APNGはimgで、WebMはvideoで表示
