@@ -1432,6 +1432,12 @@ if (loadProjectBtn && projectFileInput) {
           renderRegionList();
           drawOverlay();
           startAnim();
+          regionsPanel.style.display = 'block';
+          animPanel.style.display = 'block';
+          const exPanel = document.getElementById('export-panel');
+          if (exPanel) exPanel.style.display = 'block';
+          const rdb = document.getElementById('redetect-btn');
+          if (rdb) rdb.style.display = 'block';
           setStatus('done', `プロジェクトを読み込みました（${detectedRegions.length}部位）`);
         } else {
           throw new Error('無効なデータ形式です');
