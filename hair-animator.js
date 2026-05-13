@@ -1567,7 +1567,10 @@ if (exportBtn) {
       const W = mainCanvas.width, H = mainCanvas.height;
       const expW = Math.round(W * exportRes);
       const expH = Math.round(H * exportRes);
-      const dur = parseFloat(document.getElementById('spd').value) * 1000;
+
+      // キャッシュをリセット（古いcanvasコンテキストが残るとエラーになるため）
+      detectedRegions.forEach(r => { r._cache = null; });
+      cacheInpaintedBackgrounds();      const dur = parseFloat(document.getElementById('spd').value) * 1000;
       const delay = Math.round(dur / exportFrames);
 
       const offCanvas = document.createElement('canvas');
