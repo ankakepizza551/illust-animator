@@ -341,6 +341,31 @@ input[type=range]::-webkit-slider-thumb {
 .btn-edit.danger:hover { border-color: #f87171; color: #f87171; }
 
 @media(max-width:680px){ main{grid-template-columns:1fr;} }
+
+/* toast */
+#toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 11px 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 9999;
+  white-space: nowrap;
+  max-width: 90vw;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 </style>
 </head>
 <body>
@@ -391,19 +416,6 @@ input[type=range]::-webkit-slider-thumb {
   <div class="side">
     <div class="panel">
       <div class="panel-title">AI 部位検出</div>
-      <div style="margin-bottom:10px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Gemini APIキー</div>
-        <input type="password" id="api-key-input" placeholder="AIza..." style="
-          width:100%;padding:9px 12px;
-          background:var(--surface2);border:1px solid var(--border);
-          border-radius:8px;color:var(--text);font-size:12px;
-          font-family:'Noto Sans JP',sans-serif;outline:none;
-          transition:border-color 0.15s;
-        " onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-        <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.5">
-          <a href="https://aistudio.google.com/" target="_blank" style="color:var(--accent)">aistudio.google.com</a> で取得。入力内容はこのブラウザにのみ保持され、外部には送信されません。
-        </div>
-      </div>
       <button class="btn-primary" id="detect-btn" disabled>✨ 部位を自動検出</button>
       <button class="btn-secondary" id="redetect-btn" style="display:none;margin-top:6px">🔄 再検出する</button>
       <button class="btn-secondary" id="change-btn" style="display:none;margin-top:6px">🖼️ 画像を変更</button>
@@ -524,7 +536,12 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </main>
 
+<div id="toast"></div>
+<script src="modules/ha-state.js"></script>
 <script src="hair-animator.js"></script>
+<script src="modules/ha-anim.js"></script>
+<script src="modules/ha-edit.js"></script>
+<script src="modules/ha-export.js"></script>
 <!-- export preview modal -->
 <div id="preview-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:min(480px,92vw);text-align:center">
