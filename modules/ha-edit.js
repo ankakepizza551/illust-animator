@@ -315,6 +315,7 @@ function onEditStart(e) {
        if (Math.hypot(pt.x - px, pt.y - py) < 18) {
          saveUndoState();
          region.pins.splice(i, 1);
+         region._geoVer = (region._geoVer || 0) + 1;
          removed = true;
          break;
        }
@@ -322,6 +323,7 @@ function onEditStart(e) {
     if (!removed && pointInPolygon(rx, ry, region.polygon)) {
        saveUndoState();
        region.pins.push([rx, ry]);
+       region._geoVer = (region._geoVer || 0) + 1;
     }
     drawEditOverlay();
     return;
@@ -333,7 +335,7 @@ function onEditStart(e) {
       const [fx, fy] = newRegionPoints[0];
       if (Math.hypot((rx - fx) * W, (ry - fy) * H) < 18) {
         saveUndoState();
-        const colors = ['#a78bfa','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171'];
+        const colors = REGION_COLORS;
         const xs = newRegionPoints.map(p => p[0]), ys = newRegionPoints.map(p => p[1]);
         const cx = xs.reduce((a,b)=>a+b,0)/xs.length, cy = ys.reduce((a,b)=>a+b,0)/ys.length;
         detectedRegions.push({
@@ -364,7 +366,7 @@ function onEditStart(e) {
   if (vidx >= 0) {
     const now = Date.now();
     if (now - lastTapTime < 400 && lastTapVertexIdx === vidx) {
-      if (region.polygon.length > 3) { saveUndoState(); region.polygon.splice(vidx, 1); drawEditOverlay(); }
+      if (region.polygon.length > 3) { saveUndoState(); region.polygon.splice(vidx, 1); region._geoVer = (region._geoVer || 0) + 1; drawEditOverlay(); }
       lastTapTime = 0; lastTapVertexIdx = -1; return;
     }
     lastTapTime = now; lastTapVertexIdx = vidx;
@@ -375,6 +377,7 @@ function onEditStart(e) {
   if (edge) {
     saveUndoState();
     region.polygon.splice(edge.insertAfter + 1, 0, edge.point);
+    region._geoVer = (region._geoVer || 0) + 1;
     draggingVertexIdx = edge.insertAfter + 1;
     overlayCanvas.classList.add('dragging');
     drawEditOverlay();
@@ -405,10 +408,12 @@ function onEditMove(e) {
 
   if (draggingAnchor) {
     region.anchor = [Math.max(0, Math.min(1, pt.x / W)), Math.max(0, Math.min(1, pt.y / H))];
+    region._geoVer = (region._geoVer || 0) + 1;
     drawEditOverlay(); return;
   }
   if (draggingVertexIdx >= 0) {
     region.polygon[draggingVertexIdx] = [Math.max(0, Math.min(1, pt.x / W)), Math.max(0, Math.min(1, pt.y / H))];
+    region._geoVer = (region._geoVer || 0) + 1;
     drawEditOverlay();
   }
 }

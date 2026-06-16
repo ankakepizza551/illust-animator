@@ -69,9 +69,8 @@ function renderAnimFrame(t) {
     const regionW = maxX - minX, regionH = maxY - minY;
     if (regionW <= 0 || regionH <= 0) return;
 
-    const pinsHash = (region.pins || []).map(p => p[0].toFixed(4)+','+p[1].toFixed(4)).join('|');
-    const polyHash = region.polygon.map(p => p[0].toFixed(4)+','+p[1].toFixed(4)).join('|');
-    if (!region._cache || region._cache.W !== W || region._cache.H !== H || region._cache.feather !== feather || region._cache.polyHash !== polyHash || region._cache.pinsHash !== pinsHash) {
+    const geoVer = region._geoVer || 0;
+    if (!region._cache || region._cache.W !== W || region._cache.H !== H || region._cache.feather !== feather || region._cache.geoVer !== geoVer) {
       const maskCanvas = document.createElement('canvas');
       maskCanvas.width = regionW; maskCanvas.height = regionH;
       const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
@@ -97,7 +96,7 @@ function renderAnimFrame(t) {
       const out = tCtx.createImageData(regionW, regionH);
 
       region._cache = {
-        W, H, feather, polyHash, pinsHash,
+        W, H, feather, geoVer,
         maskData, tmp, tCtx,
         src: imgData.data,
         out, dst: out.data
@@ -125,15 +124,18 @@ function renderAnimFrame(t) {
 
         let pinAttenuation = 1.0;
         if (pins.length > 0) {
-          let minDist = Infinity;
+          const pinRadiusSq = pinRadius * pinRadius;
+          let minDistSq = Infinity;
           for (let i = 0; i < pins.length; i++) {
             const ppx = pins[i][0] * W;
             const ppy = pins[i][1] * H;
-            const d = Math.sqrt((worldX - ppx) ** 2 + (worldY - ppy) ** 2);
-            if (d < minDist) minDist = d;
+            const dSq = (worldX - ppx) ** 2 + (worldY - ppy) ** 2;
+            if (dSq < minDistSq) minDistSq = dSq;
           }
-          let t_atten = Math.min(minDist / pinRadius, 1.0);
-          pinAttenuation = t_atten * t_atten * (3 - 2 * t_atten);
+          if (minDistSq < pinRadiusSq) {
+            const t_atten = Math.sqrt(minDistSq) / pinRadius;
+            pinAttenuation = t_atten * t_atten * (3 - 2 * t_atten);
+          }
         }
 
         const influence = Math.min(distFromAnchor / influenceScale, 1) * rAmp * pinAttenuation;
@@ -162,9 +164,10 @@ function renderAnimFrame(t) {
         if (useInteract && currentPullStrength > 0.01) {
           const pdx = currentPointerX - worldX;
           const pdy = currentPointerY - worldY;
-          const pDist = Math.sqrt(pdx*pdx + pdy*pdy);
           const pRad = 150;
-          if (pDist < pRad && pDist > 0) {
+          const pDistSq = pdx * pdx + pdy * pdy;
+          if (pDistSq < pRad * pRad && pDistSq > 0) {
+            const pDist = Math.sqrt(pDistSq);
             const pull = (1 - pDist / pRad) * 20 * currentPullStrength;
             const normInfl = rAmp > 0 ? Math.min(influence / rAmp, 1) : 0;
             interactX = (pdx / pDist) * pull * normInfl;

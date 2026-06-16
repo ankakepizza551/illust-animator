@@ -208,8 +208,8 @@ function renderRegionList() {
     item.innerHTML = `
       <div class="region-color" style="background:${region.color}"></div>
       <div class="region-label" style="flex:1;">
-        ${region.label}
-        <div style="font-size:10px;color:var(--muted);margin-top:2px">${region.description||''}</div>
+        <span class="region-label-text"></span>
+        <div class="region-desc-text" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
       <div style="display:flex; flex-direction:column; gap:2px; margin-right:8px; align-items:center;">
         <button class="layer-up" style="background:none; border:none; color:${i === 0 ? 'transparent' : 'var(--muted)'}; cursor:${i === 0 ? 'default' : 'pointer'}; font-size:10px; padding:2px;" title="順序を奥へ">▲</button>
@@ -218,6 +218,8 @@ function renderRegionList() {
       <button class="layer-delete" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:13px; margin-right:6px; padding:4px;" title="この部位を削除">🗑️</button>
       <div class="region-toggle ${region.enabled ? 'on' : ''}" data-idx="${i}"></div>
     `;
+    item.querySelector('.region-label-text').textContent = region.label || '';
+    item.querySelector('.region-desc-text').textContent = region.description || '';
 
     const upBtn = item.querySelector('.layer-up');
     const downBtn = item.querySelector('.layer-down');

@@ -292,22 +292,21 @@ if (exportBtn) {
         return;
 
       } else if (exportFmt === 'apng') {
-        await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
-        const gif = new GIF({ workers: 4, quality: 1, width: expW, height: expH, transparent: 0x000000 });
+        await loadScriptOnce('https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.js');
+        const frames = [];
         for (let i = 0; i < exportFrames; i++) {
           renderAnimFrame(i / exportFrames * (dur / 1000));
           offCtx.clearRect(0, 0, W, H);
           offCtx.drawImage(mainCanvas, 0, 0);
-          gif.addFrame(offCanvas, { delay, copy: true });
+          frames.push(offCtx.getImageData(0, 0, expW, expH).data.buffer);
           updateProgress(i + 1, exportFrames);
           await new Promise(r => setTimeout(r, 0));
         }
-        gif.on('progress', p => {
-          fill.style.width = (50 + p * 50) + '%';
-          label.textContent = 'エンコード中... ' + Math.round(p * 100) + '%';
-        });
-        gif.on('finished', blob => { showPreview(blob, 'hair_animated_hq.gif', 'image/gif', expW, expH); finishExport(); });
-        gif.render();
+        label.textContent = 'エンコード中...';
+        const apngBuf = UPNG.encode(frames, expW, expH, 0, Array(exportFrames).fill(delay));
+        const blob = new Blob([apngBuf], { type: 'image/png' });
+        showPreview(blob, 'hair_animated.apng', 'image/png', expW, expH);
+        finishExport();
         return;
       }
 
